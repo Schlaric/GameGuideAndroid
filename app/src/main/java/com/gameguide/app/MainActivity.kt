@@ -64,7 +64,7 @@ class MainActivity : Activity() {
                         }
                     },
                     {
-                        Toast.makeText(this, "uBlock Origin could not start: ${it.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "uBlock Origin could not start: ${it?.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
                         val url = pendingLoadUrl
                         if (url != null) {
                             pendingLoadUrl = null
@@ -218,7 +218,7 @@ class MainActivity : Activity() {
         header.addView(button("← Library") { saveCurrentSpot(); showLibrary() })
         header.addView(button("SAVE SPOT") { saveCurrentSpot() })
         header.addView(button("Open in browser") {
-            val url = geckoSession?.currentUri ?: guide.url
+            val url = guide.savedUrl.ifBlank { guide.url }
             startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
         })
         root.addView(header)
@@ -232,8 +232,13 @@ class MainActivity : Activity() {
 
         session.setContentDelegate(object : GeckoSession.ContentDelegate {})
         session.setProgressDelegate(object : GeckoSession.ProgressDelegate {
+            override fun onPageStart(session: GeckoSession, url: String) {
+                guide.savedUrl = url
+                saveGuides()
+            }
+
             override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {
-                guide.savedSessionState = sessionState.toString() ?: ""
+                guide.savedSessionState = sessionState.toString()
                 saveGuides()
             }
         })
@@ -257,7 +262,7 @@ class MainActivity : Activity() {
     private fun saveCurrentSpot() {
         val guide = activeGuide ?: return
         val session = geckoSession ?: return
-        guide.savedUrl = session.currentUri ?: guide.url
+        if (guide.savedUrl.isBlank()) guide.savedUrl = guide.url
         saveGuides()
         Toast.makeText(this, "Spot saved!", Toast.LENGTH_SHORT).show()
     }
