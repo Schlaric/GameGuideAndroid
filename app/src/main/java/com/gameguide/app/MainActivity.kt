@@ -22,7 +22,8 @@ private data class Guide(
     var title: String,
     var url: String,
     var savedUrl: String,
-    var scrollY: Int
+    var scrollY: Int,
+    var savedSessionState: String = ""
 )
 
 class MainActivity : Activity() {
@@ -37,7 +38,6 @@ class MainActivity : Activity() {
     private var activeGuide: Guide? = null
     private var uBlockReady = false
     private var pendingLoadUrl: String? = null
-    private var pendingRestoreY = 0
     private val prefs by lazy { getSharedPreferences("gameguide", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -198,6 +198,7 @@ class MainActivity : Activity() {
                             existing.url = url
                             existing.savedUrl = ""
                             existing.scrollY = 0
+                            existing.savedSessionState = ""
                         }
                         saveGuides()
                         dialog.dismiss()
@@ -227,17 +228,13 @@ class MainActivity : Activity() {
         val session = GeckoSession()
         geckoView = view
         geckoSession = session
-        pendingRestoreY = guide.scrollY
         pendingLoadUrl = if (guide.savedUrl.isNotBlank()) guide.savedUrl else guide.url
 
         session.setContentDelegate(object : GeckoSession.ContentDelegate {})
         session.setProgressDelegate(object : GeckoSession.ProgressDelegate {
-            override fun onPageStop(session: GeckoSession, success: Boolean) {
-                if (success && pendingRestoreY > 0) {
-                    val y = pendingRestoreY
-                    pendingRestoreY = 0
-                    session.evaluateJS("window.scrollTo(0, $y)")
-                }
+            override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {
+                guide.savedSessionState = sessionState.toString() ?: ""
+                saveGuides()
             }
         })
         session.open(runtime!!)
@@ -251,7 +248,9 @@ class MainActivity : Activity() {
         val url = pendingLoadUrl!!
         if (uBlockReady) {
             pendingLoadUrl = null
-            session.loadUri(url)
+            val savedState = guide.savedSessionState
+            val restored = if (savedState.isNotBlank()) GeckoSession.SessionState.fromString(savedState) else null
+            if (restored != null) session.restoreState(restored) else session.loadUri(url)
         }
     }
 
@@ -259,17 +258,8 @@ class MainActivity : Activity() {
         val guide = activeGuide ?: return
         val session = geckoSession ?: return
         guide.savedUrl = session.currentUri ?: guide.url
-        session.evaluateJS("window.scrollY").accept(
-            { value ->
-                guide.scrollY = (value as? Number)?.toInt() ?: guide.scrollY
-                saveGuides()
-                Toast.makeText(this, "Spot saved!", Toast.LENGTH_SHORT).show()
-            },
-            {
-                saveGuides()
-                Toast.makeText(this, "Page saved; scroll position could not be read.", Toast.LENGTH_SHORT).show()
-            }
-        )
+        saveGuides()
+        Toast.makeText(this, "Spot saved!", Toast.LENGTH_SHORT).show()
     }
 
     private fun saveGuides() {
@@ -281,6 +271,7 @@ class MainActivity : Activity() {
                 put("url", guide.url)
                 put("savedUrl", guide.savedUrl)
                 put("scrollY", guide.scrollY)
+                put("savedSessionState", guide.savedSessionState)
             })
         }
         prefs.edit().putString("guides", array.toString()).apply()
@@ -298,7 +289,8 @@ class MainActivity : Activity() {
                     item.optString("title"),
                     item.optString("url"),
                     item.optString("savedUrl"),
-                    item.optInt("scrollY")
+                    item.optInt("scrollY"),
+                    item.optString("savedSessionState", "")
                 ))
             }
         } catch (_: Exception) { }
