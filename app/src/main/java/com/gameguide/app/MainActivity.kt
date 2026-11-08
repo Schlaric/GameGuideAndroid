@@ -4,13 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
-import android.view.View
 import android.view.ViewGroup
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -19,8 +13,9 @@ import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayInputStream
-import java.util.Locale
+import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoView
 
 private data class Guide(
     val id: Long,
@@ -31,50 +26,63 @@ private data class Guide(
 )
 
 class MainActivity : Activity() {
+    companion object {
+        private var runtime: GeckoRuntime? = null
+    }
+
     private val guides = mutableListOf<Guide>()
     private lateinit var root: LinearLayout
-    private var webView: WebView? = null
+    private var geckoView: GeckoView? = null
+    private var geckoSession: GeckoSession? = null
     private var activeGuide: Guide? = null
+    private var uBlockReady = false
+    private var pendingLoadUrl: String? = null
+    private var pendingRestoreY = 0
     private val prefs by lazy { getSharedPreferences("gameguide", MODE_PRIVATE) }
-
-    // Block common third-party advertising and tracking hosts without blocking IGN itself.
-    private val blockedAdDomains = setOf(
-        "doubleclick.net",
-        "googlesyndication.com",
-        "googleadservices.com",
-        "googletagservices.com",
-        "adnxs.com",
-        "adsrvr.org",
-        "criteo.com",
-        "taboola.com",
-        "outbrain.com",
-        "pubmatic.com",
-        "rubiconproject.com",
-        "openx.net",
-        "amazon-adsystem.com",
-        "advertising.com",
-        "scorecardresearch.com",
-        "quantserve.com",
-        "ads.ign.com",
-        "ad.ign.com"
-    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.rgb(15, 18, 26)
         window.navigationBarColor = Color.rgb(15, 18, 26)
         loadGuides()
+        initializeBrowser()
         showLibrary()
+    }
+
+    private fun initializeBrowser() {
+        try {
+            if (runtime == null) runtime = GeckoRuntime.create(this)
+            runtime!!.webExtensionController
+                .ensureBuiltIn("resource://android/assets/ublock/", "uBlock0@raymondhill.net")
+                .accept(
+                    {
+                        uBlockReady = true
+                        val url = pendingLoadUrl
+                        if (url != null) {
+                            pendingLoadUrl = null
+                            geckoSession?.loadUri(url)
+                        }
+                    },
+                    {
+                        Toast.makeText(this, "uBlock Origin could not start: ${it.message}", Toast.LENGTH_LONG).show()
+                        val url = pendingLoadUrl
+                        if (url != null) {
+                            pendingLoadUrl = null
+                            geckoSession?.loadUri(url)
+                        }
+                    }
+                )
+        } catch (e: Exception) {
+            Toast.makeText(this, "Browser startup failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    private fun baseLayout(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(15, 18, 26))
-            setPadding(dp(18), dp(16), dp(18), dp(12))
-        }
+    private fun baseLayout(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(Color.rgb(15, 18, 26))
+        setPadding(dp(18), dp(16), dp(18), dp(12))
     }
 
     private fun text(value: String, size: Float, color: Int = Color.WHITE): TextView =
@@ -92,8 +100,10 @@ class MainActivity : Activity() {
         }
 
     private fun showLibrary() {
-        webView?.destroy()
-        webView = null
+        geckoView?.releaseSession()
+        geckoSession?.close()
+        geckoView = null
+        geckoSession = null
         activeGuide = null
         root = baseLayout()
         root.addView(text("GAMEGUIDE", 13f, Color.rgb(120, 170, 255)))
@@ -181,15 +191,13 @@ class MainActivity : Activity() {
                             Toast.makeText(this, "Enter a game title and URL.", Toast.LENGTH_SHORT).show()
                             return@setOnClickListener
                         }
-                        if (!url.startsWith("https://") && !url.startsWith("http://")) {
-                            url = "https://$url"
-                        }
-                        if (existing == null) {
-                            guides.add(Guide(System.currentTimeMillis(), title, url, "", 0))
-                        } else {
+                        if (!url.startsWith("https://") && !url.startsWith("http://")) url = "https://$url"
+                        if (existing == null) guides.add(Guide(System.currentTimeMillis(), title, url, "", 0))
+                        else {
                             existing.title = title
                             existing.url = url
-                            existing.savedUrl = url
+                            existing.savedUrl = ""
+                            existing.scrollY = 0
                         }
                         saveGuides()
                         dialog.dismiss()
@@ -202,17 +210,6 @@ class MainActivity : Activity() {
 
     private fun showEditDialog(guide: Guide) = showAddDialog(guide)
 
-    private fun isBlockedAdUrl(url: String): Boolean {
-        val host = try {
-            android.net.Uri.parse(url).host?.lowercase(Locale.ROOT) ?: return false
-        } catch (_: Exception) {
-            return false
-        }
-        return blockedAdDomains.any { domain ->
-            host == domain || host.endsWith(".$domain")
-        }
-    }
-
     private fun openGuide(guide: Guide) {
         activeGuide = guide
         root = baseLayout()
@@ -220,53 +217,59 @@ class MainActivity : Activity() {
         header.addView(button("← Library") { saveCurrentSpot(); showLibrary() })
         header.addView(button("SAVE SPOT") { saveCurrentSpot() })
         header.addView(button("Open in browser") {
-            val url = webView?.url ?: guide.url
+            val url = geckoSession?.currentUri ?: guide.url
             startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
         })
         root.addView(header)
         root.addView(text(guide.title, 18f).apply { setPadding(0, dp(5), 0, dp(8)) })
 
-        val browser = WebView(this)
-        webView = browser
-        browser.settings.javaScriptEnabled = true
-        browser.settings.domStorageEnabled = true
-        browser.settings.loadsImagesAutomatically = true
-        browser.webChromeClient = WebChromeClient()
-        browser.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                if (isBlockedAdUrl(request.url.toString())) {
-                    return WebResourceResponse(
-                        "text/plain",
-                        "utf-8",
-                        204,
-                        "No Content",
-                        emptyMap(),
-                        ByteArrayInputStream(ByteArray(0))
-                    )
-                }
-                return super.shouldInterceptRequest(view, request)
-            }
+        val view = GeckoView(this)
+        val session = GeckoSession()
+        geckoView = view
+        geckoSession = session
+        pendingRestoreY = guide.scrollY
+        pendingLoadUrl = if (guide.savedUrl.isNotBlank()) guide.savedUrl else guide.url
 
-            override fun onPageFinished(view: WebView, url: String) {
-                if (guide.savedUrl == url && guide.scrollY > 0) {
-                    view.postDelayed({ view.scrollTo(0, guide.scrollY) }, 500)
+        session.setContentDelegate(object : GeckoSession.ContentDelegate {})
+        session.setProgressDelegate(object : GeckoSession.ProgressDelegate {
+            override fun onPageStop(session: GeckoSession, success: Boolean) {
+                if (success && pendingRestoreY > 0) {
+                    val y = pendingRestoreY
+                    pendingRestoreY = 0
+                    session.evaluateJS("window.scrollTo(0, $y)")
                 }
             }
-        }
-        root.addView(browser, LinearLayout.LayoutParams(
+        })
+        session.open(runtime!!)
+        view.setSession(session)
+
+        root.addView(view, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
         setContentView(root)
-        browser.loadUrl(if (guide.savedUrl.isNotBlank()) guide.savedUrl else guide.url)
+
+        val url = pendingLoadUrl!!
+        if (uBlockReady) {
+            pendingLoadUrl = null
+            session.loadUri(url)
+        }
     }
 
     private fun saveCurrentSpot() {
         val guide = activeGuide ?: return
-        val browser = webView ?: return
-        guide.savedUrl = browser.url ?: guide.url
-        guide.scrollY = browser.scrollY
-        saveGuides()
-        Toast.makeText(this, "Spot saved!", Toast.LENGTH_SHORT).show()
+        val session = geckoSession ?: return
+        guide.savedUrl = session.currentUri ?: guide.url
+        session.evaluateJS("window.scrollY").accept(
+            { value ->
+                guide.scrollY = (value as? Number)?.toInt() ?: guide.scrollY
+                saveGuides()
+                Toast.makeText(this, "Spot saved!", Toast.LENGTH_SHORT).show()
+            },
+            {
+                saveGuides()
+                Toast.makeText(this, "Page saved; scroll position could not be read.", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     private fun saveGuides() {
@@ -303,19 +306,20 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Android")
     override fun onBackPressed() {
-        val browser = webView
-        if (browser != null && browser.canGoBack()) {
-            browser.goBack()
-        } else if (activeGuide != null) {
+        if (activeGuide != null) {
             saveCurrentSpot()
             showLibrary()
-        } else {
-            super.onBackPressed()
-        }
+        } else super.onBackPressed()
     }
 
     override fun onPause() {
-        if (webView != null) saveCurrentSpot()
+        if (geckoSession != null) saveCurrentSpot()
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        geckoView?.releaseSession()
+        geckoSession?.close()
+        super.onDestroy()
     }
 }
