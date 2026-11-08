@@ -64,7 +64,6 @@ class MainActivity : Activity() {
     private var backButton: Button? = null
     private var walkthroughHeader: LinearLayout? = null
     private var fullscreenButton: Button? = null
-    private var fullscreenExitButton: Button? = null
     private var isFullscreen = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val browserStartupTimeout = Runnable {
@@ -113,7 +112,6 @@ class MainActivity : Activity() {
     private fun setFullscreen(enabled: Boolean) {
         isFullscreen = enabled
         walkthroughHeader?.visibility = if (enabled) View.GONE else View.VISIBLE
-        fullscreenExitButton?.visibility = if (enabled) View.VISIBLE else View.GONE
         root.setPadding(if (enabled) 0 else dp(8), if (enabled) 0 else dp(4), if (enabled) 0 else dp(8), 0)
         val flags = if (enabled) {
             (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -778,13 +776,17 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        toolbar.addView(text(guide.title, 16f, Color.WHITE).apply {
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        // Put the Library action first; browser history navigation is clearly
+        // labeled separately so it cannot be mistaken for returning to Library.
+        toolbar.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
+            textSize = 11f
+            minHeight = dp(36)
+            setPadding(dp(8), 0, dp(8), 0)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
+                rightMargin = dp(5)
+            }
         })
-        backButton = styledButton("← Back") {
+        backButton = styledButton("Previous webpage") {
             geckoSession?.goBack()
         }.apply {
             textSize = 11f
@@ -793,18 +795,10 @@ class MainActivity : Activity() {
             isEnabled = false
             alpha = 0.45f
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
-                leftMargin = dp(5)
+                rightMargin = dp(5)
             }
         }
         toolbar.addView(backButton)
-        toolbar.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
-            textSize = 11f
-            minHeight = dp(36)
-            setPadding(dp(8), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
-                leftMargin = dp(5)
-            }
-        })
         toolbar.addView(styledButton("↻ Reset") {
             AlertDialog.Builder(this@MainActivity)
                 .setTitle("Reset walkthrough?")
@@ -875,20 +869,6 @@ class MainActivity : Activity() {
         browserFrame.addView(view, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
-        fullscreenExitButton = styledButton("✕  Exit fullscreen", true) {
-            setFullscreen(false)
-        }.apply {
-            textSize = 12f
-            minHeight = dp(42)
-            elevation = dp(10).toFloat()
-            visibility = View.GONE
-        }
-        browserFrame.addView(fullscreenExitButton, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(44), Gravity.TOP or Gravity.END
-        ).apply {
-            topMargin = dp(12)
-            marginEnd = dp(12)
-        })
         root.addView(browserFrame, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
@@ -961,7 +941,10 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Android")
     override fun onBackPressed() {
-        if (activeGuide != null) {
+        // Android's system Back gesture/button is the unobtrusive fullscreen exit.
+        if (isFullscreen) {
+            setFullscreen(false)
+        } else if (activeGuide != null) {
             saveCurrentSpot { showLibrary() }
         } else super.onBackPressed()
     }
