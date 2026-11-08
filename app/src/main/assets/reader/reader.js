@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  if (!/(^|\\.)ign\\.com$/i.test(location.hostname) || !location.pathname.startsWith("/wikis/")) return;
+  if (!/(^|\.)ign\.com$/i.test(location.hostname) || !location.pathname.startsWith("/wikis/")) return;
 
   const selectors = [
     "main [data-testid='article-body']",
