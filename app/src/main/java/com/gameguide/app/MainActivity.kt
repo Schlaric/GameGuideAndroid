@@ -741,19 +741,10 @@ class MainActivity : Activity() {
         actions.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
             textSize = 11f
             minHeight = dp(36)
-            setPadding(dp(6), 0, dp(6), 0)
-            layoutParams = LinearLayout.LayoutParams(0, dp(36), 1f)
-        })
-        actions.addView(styledButton("Open in Browser") {
-            val url = guide.savedUrl.ifBlank { guide.url }
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }.apply {
-            textSize = 11f
-            minHeight = dp(36)
-            setPadding(dp(6), 0, dp(6), 0)
-            layoutParams = LinearLayout.LayoutParams(0, dp(36), 1f).apply {
-                leftMargin = dp(6)
-            }
+            setPadding(dp(12), 0, dp(12), 0)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)
+            )
         })
         header.addView(actions)
         root.addView(header, LinearLayout.LayoutParams(
