@@ -124,10 +124,22 @@ class MainActivity : Activity() {
         val url = pendingLoadUrl ?: return
         val session = geckoSession ?: return
         pendingLoadUrl = null
-        // Always start a fresh navigation. Restoring a previously saved
-        // GeckoSession state can leave the embedded browser stuck loading.
-        activeGuide?.savedSessionState = ""
-        session.loadUri(url)
+        // GeckoView session snapshots include scroll position, zoom, form data,
+        // and navigation history. Restore them when available; otherwise load fresh.
+        val savedState = activeGuide?.savedSessionState
+        val restored = try {
+            savedState?.takeIf { it.isNotBlank() }?.let {
+                GeckoSession.SessionState.fromString(it)
+            }
+        } catch (e: Exception) {
+            Log.w("GameGuide", "Saved browser state could not be restored; loading URL instead", e)
+            null
+        }
+        if (restored != null) {
+            session.restoreState(restored)
+        } else {
+            session.loadUri(url)
+        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -651,39 +663,17 @@ class MainActivity : Activity() {
     private fun saveCurrentSpot(afterSave: (() -> Unit)? = null) {
         val guide = activeGuide ?: run { afterSave?.invoke(); return }
         val session = geckoSession ?: run { afterSave?.invoke(); return }
-        session.evaluateJS(
-            "JSON.stringify({url: window.location.href, y: Math.max(0, Math.round(window.scrollY || document.documentElement.scrollTop || 0))})"
-        ).accept(
-            { value ->
-                try {
-                    val state = JSONObject(value as? String ?: value.toString())
-                    guide.savedUrl = state.optString("url").ifBlank { guide.savedUrl.ifBlank { guide.url } }
-                    guide.scrollY = state.optInt("y", guide.scrollY).coerceAtLeast(0)
-                    saveGuides()
-                    runOnUiThread {
-                        if (afterSave == null) Toast.makeText(this, "Reading position saved!", Toast.LENGTH_SHORT).show()
-                        afterSave?.invoke()
-                    }
-                } catch (e: Exception) {
-                    Log.w("GameGuide", "Could not read current page position", e)
-                    guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
-                    saveGuides()
-                    runOnUiThread {
-                        if (afterSave == null) Toast.makeText(this, "Page saved, but its scroll position couldn't be read.", Toast.LENGTH_LONG).show()
-                        afterSave?.invoke()
-                    }
-                }
-            },
-            { error ->
-                Log.w("GameGuide", "Saving reading position failed", error)
-                guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
-                saveGuides()
-                runOnUiThread {
-                    if (afterSave == null) Toast.makeText(this, "Page saved, but its scroll position couldn't be read.", Toast.LENGTH_LONG).show()
-                    afterSave?.invoke()
-                }
+        // GeckoView does not expose WebView-style evaluateJavascript(). Its
+        // native session snapshot is the supported way to persist reading position.
+        session.flushSessionState()
+        mainHandler.postDelayed({
+            guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
+            saveGuides()
+            if (afterSave == null) {
+                Toast.makeText(this, "Reading position saved!", Toast.LENGTH_SHORT).show()
             }
-        )
+            afterSave?.invoke()
+        }, 500)
     }
 
     @Deprecated("Deprecated in Android")
