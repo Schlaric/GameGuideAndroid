@@ -52,22 +52,13 @@ class MainActivity : Activity() {
     private fun initializeBrowser() {
         try {
             if (runtime == null) runtime = GeckoRuntime.create(this)
-            runtime!!.webExtensionController
-                .ensureBuiltIn("resource://android/assets/ublock/", "uBlock0@raymondhill.net")
-                .accept(
-                    {
-                        browserReady = true
-                        flushPendingLoad()
-                    },
-                    {
-                        browserReady = true
-                        Toast.makeText(this, "uBlock Origin could not start: ${it?.message ?: "unknown error"}. Pages will still open without blocking.", Toast.LENGTH_LONG).show()
-                        flushPendingLoad()
-                    }
-                )
+            // Diagnostic build: bypass uBlock completely to determine whether
+            // the extension is interfering with page navigation/rendering.
+            browserReady = true
+            flushPendingLoad()
         } catch (e: Exception) {
             browserReady = true
-            Toast.makeText(this, "Browser startup failed: ${e.message}. Trying to open pages without uBlock.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Browser startup failed: ${e.message}", Toast.LENGTH_LONG).show()
             flushPendingLoad()
         }
     }
