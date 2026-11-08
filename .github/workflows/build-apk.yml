@@ -28,6 +28,24 @@ jobs:
         run: |
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Download and prepare uBlock Origin
+        run: |
+          mkdir -p app/src/main/assets/ublock
+          curl -fL "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi" -o /tmp/ublock.xpi
+          unzip -q /tmp/ublock.xpi -d app/src/main/assets/ublock
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest_path = Path("app/src/main/assets/ublock/manifest.json")
+          manifest = json.loads(manifest_path.read_text())
+          manifest["permissions"] = [
+              p for p in manifest.get("permissions", [])
+              if p not in ("menus", "publicSuffix")
+          ]
+          manifest.pop("commands", None)
+          manifest.pop("sidebar_action", None)
+          manifest_path.write_text(json.dumps(manifest, indent=2))
+          PY
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Upload APK
