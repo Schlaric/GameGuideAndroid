@@ -1,6 +1,10 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+
+    dependencies {
+        implementation("org.mozilla.geckoview:geckoview:159.0.20261022150525")
+    }
 }
 
 android {
