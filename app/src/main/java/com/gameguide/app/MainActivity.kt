@@ -32,6 +32,8 @@ import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 
+private data class AppTheme(val name: String, val primary: Int, val surface: Int, val border: Int, val softAccent: Int)
+
 private data class Guide(
     val id: Long,
     var title: String,
@@ -69,10 +71,25 @@ class MainActivity : Activity() {
     }
     private val prefs by lazy { getSharedPreferences("gameguide", MODE_PRIVATE) }
 
+    private fun currentTheme(): AppTheme = when (prefs.getString("app_theme", "Blue")) {
+        "Purple" -> AppTheme("Purple", Color.rgb(155, 89, 220), Color.rgb(43, 31, 55), Color.rgb(91, 62, 116), Color.rgb(75, 48, 96))
+        "Green" -> AppTheme("Green", Color.rgb(35, 160, 110), Color.rgb(27, 46, 40), Color.rgb(48, 91, 73), Color.rgb(35, 70, 56))
+        "Red" -> AppTheme("Red", Color.rgb(210, 75, 75), Color.rgb(49, 32, 36), Color.rgb(105, 57, 62), Color.rgb(78, 42, 47))
+        "Orange" -> AppTheme("Orange", Color.rgb(220, 130, 40), Color.rgb(49, 39, 29), Color.rgb(105, 78, 48), Color.rgb(79, 57, 34))
+        "Teal" -> AppTheme("Teal", Color.rgb(20, 155, 160), Color.rgb(26, 44, 48), Color.rgb(45, 88, 91), Color.rgb(33, 68, 71))
+        "Pink" -> AppTheme("Pink", Color.rgb(210, 85, 145), Color.rgb(49, 31, 43), Color.rgb(104, 57, 83), Color.rgb(78, 43, 63))
+        else -> AppTheme("Blue", Color.rgb(57, 112, 220), Color.rgb(27, 35, 49), Color.rgb(47, 59, 79), Color.rgb(38, 50, 70))
+    }
+
+    private fun applyThemeToWindow() {
+        val background = Color.rgb(15, 18, 26)
+        window.statusBarColor = background
+        window.navigationBarColor = background
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(15, 18, 26)
-        window.navigationBarColor = Color.rgb(15, 18, 26)
+        applyThemeToWindow()
         loadGuides()
         initializeBrowser()
         showLibrary()
@@ -198,7 +215,7 @@ class MainActivity : Activity() {
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(if (primary) Color.WHITE else Color.rgb(205, 215, 232))
             background = rounded(
-                if (primary) Color.rgb(57, 112, 220) else Color.rgb(43, 52, 69),
+                if (primary) currentTheme().primary else Color.rgb(43, 52, 69),
                 12
             )
             stateListAnimator = null
@@ -401,7 +418,7 @@ class MainActivity : Activity() {
                                 val itemRow = LinearLayout(this).apply {
                                     orientation = LinearLayout.HORIZONTAL
                                     gravity = Gravity.CENTER_VERTICAL
-                                    background = rounded(Color.rgb(27, 35, 49), 12)
+                                    background = rounded(currentTheme().surface, 12)
                                     setPadding(dp(8), dp(8), dp(8), dp(8))
                                     isClickable = true
                                     isFocusable = true
@@ -482,9 +499,9 @@ class MainActivity : Activity() {
             val empty = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                background = rounded(Color.rgb(25, 32, 45), 20, Color.rgb(48, 61, 82))
+                background = rounded(currentTheme().surface, 20, currentTheme().border)
                 setPadding(dp(24), dp(34), dp(24), dp(34))
-                addView(text("＋", 36f, Color.rgb(125, 170, 255)).apply { gravity = Gravity.CENTER })
+                addView(text("＋", 36f, currentTheme().primary).apply { gravity = Gravity.CENTER })
                 addView(text("Your library starts here", 19f).apply {
                     gravity = Gravity.CENTER
                     typeface = Typeface.DEFAULT_BOLD
@@ -500,18 +517,18 @@ class MainActivity : Activity() {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = rounded(Color.rgb(27, 35, 49), 18, Color.rgb(47, 59, 79))
+                background = rounded(currentTheme().surface, 18, currentTheme().border)
                 setPadding(dp(12), dp(12), dp(12), dp(12))
             }
             val cover = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                background = rounded(Color.rgb(43, 58, 83), 12)
+                background = rounded(currentTheme().softAccent, 12)
                 clipToOutline = true
                 if (guide.coverUri.isNotBlank()) {
                     loadCoverInto(guide.coverUri, this)
                 } else {
                     setImageResource(android.R.drawable.ic_menu_gallery)
-                    setColorFilter(Color.rgb(155, 181, 225))
+                    setColorFilter(currentTheme().primary)
                 }
                 layoutParams = LinearLayout.LayoutParams(dp(82), dp(112))
             }
@@ -572,13 +589,24 @@ class MainActivity : Activity() {
             setText(prefs.getString("steamgriddb_api_key", "").orEmpty())
         }
         val help = text("Create a free account at SteamGridDB, then generate an API key in Profile → Preferences. Paste it here; it stays on this device and is not added to the public GitHub project.", 13f, Color.LTGRAY)
+        lateinit var settingsDialog: AlertDialog
+        val themeHeading = text("Theme", 14f, Color.WHITE).apply {
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(18), 0, dp(4))
+        }
+        val themeButton = styledButton("Choose theme: ${currentTheme().name}") {
+            settingsDialog.dismiss()
+            showThemePicker()
+        }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
             addView(help)
             addView(keyInput)
+            addView(themeHeading)
+            addView(themeButton)
         }
-        AlertDialog.Builder(this)
+        settingsDialog = AlertDialog.Builder(this)
             .setTitle("Cover art settings")
             .setView(box)
             .setNegativeButton("Cancel", null)
@@ -590,6 +618,23 @@ class MainActivity : Activity() {
                 prefs.edit().putString("steamgriddb_api_key", keyInput.text.toString().trim()).apply()
                 Toast.makeText(this, "SteamGridDB key saved on this device.", Toast.LENGTH_SHORT).show()
             }
+            .create()
+        settingsDialog.show()
+    }
+
+    private fun showThemePicker() {
+        val names = arrayOf("Blue", "Purple", "Green", "Red", "Orange", "Teal", "Pink")
+        val selected = names.indexOf(currentTheme().name).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Choose a theme")
+            .setSingleChoiceItems(names, selected) { dialog, which ->
+                prefs.edit().putString("app_theme", names[which]).apply()
+                applyThemeToWindow()
+                dialog.dismiss()
+                showLibrary()
+                Toast.makeText(this, "${names[which]} theme applied.", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
@@ -607,7 +652,7 @@ class MainActivity : Activity() {
         var selectedCoverUri = existing?.coverUri ?: ""
         val coverPreview = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = rounded(Color.rgb(38, 50, 70), 10)
+            background = rounded(currentTheme().softAccent, 10)
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(dp(76), dp(104)).apply {
                 topMargin = dp(10)
