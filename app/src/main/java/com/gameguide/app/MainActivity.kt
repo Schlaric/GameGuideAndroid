@@ -139,6 +139,53 @@ class MainActivity : Activity() {
         geckoView?.requestLayout()
     }
 
+    private fun showNamedCheckpoints(guide: Guide) {
+        val key = "named_checkpoints_${guide.id}"
+        val entries = try { JSONArray(prefs.getString(key, "[]")) } catch (_: Exception) { JSONArray() }
+        if (entries.length() == 0) {
+            Toast.makeText(this, "No named checkpoints yet", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val names = Array(entries.length()) { i -> entries.getJSONObject(i).optString("name", "Checkpoint") }
+        AlertDialog.Builder(this)
+            .setTitle("Saved checkpoints")
+            .setItems(names) { _, index ->
+                val entry = entries.getJSONObject(index)
+                val choices = arrayOf("Open checkpoint", "Rename", "Delete")
+                AlertDialog.Builder(this).setTitle(entry.optString("name"))
+                    .setItems(choices) { _, choice ->
+                        when (choice) {
+                            0 -> {
+                                val url = entry.optString("url")
+                                val id = entry.optString("id")
+                                if (url.startsWith("https://") && id.startsWith("n_"))
+                                    geckoSession?.loadUri(url.substringBefore("#") + "#ggcp-open-" + id)
+                            }
+                            1 -> {
+                                val field = EditText(this).apply { setText(entry.optString("name")); setSingleLine(true) }
+                                AlertDialog.Builder(this).setTitle("Rename checkpoint").setView(field)
+                                    .setNegativeButton("Cancel", null)
+                                    .setPositiveButton("Save") { _, _ ->
+                                        val newName = field.text.toString().trim()
+                                        if (newName.isNotEmpty()) {
+                                            entry.put("name", newName)
+                                            prefs.edit().putString(key, entries.toString()).apply()
+                                        }
+                                    }.show()
+                            }
+                            2 -> AlertDialog.Builder(this).setTitle("Delete checkpoint?")
+                                .setMessage("Delete ${entry.optString("name")}?")
+                                .setNegativeButton("Cancel", null)
+                                .setPositiveButton("Delete") { _, _ ->
+                                    val remaining = JSONArray()
+                                    for (i in 0 until entries.length()) if (i != index) remaining.put(entries.getJSONObject(i))
+                                    prefs.edit().putString(key, remaining.toString()).apply()
+                                }.show()
+                        }
+                    }.show()
+            }.show()
+    }
+
     private fun initializeBrowser() {
         try {
             if (runtime == null) runtime = GeckoRuntime.create(this)
@@ -943,6 +990,8 @@ class MainActivity : Activity() {
             val menu = android.widget.PopupMenu(this@MainActivity, anchor)
             val checkpointKey = "checkpoint_url_${guide.id}"
             val checkpointUrl = prefs.getString(checkpointKey, null)
+            menu.menu.add("Save named checkpoint")
+            menu.menu.add("Manage checkpoints")
             menu.menu.add("Save chapter checkpoint")
             if (!checkpointUrl.isNullOrBlank()) menu.menu.add("Open saved checkpoint")
             menu.menu.add("Open in browser")
@@ -951,6 +1000,33 @@ class MainActivity : Activity() {
             menu.setOnMenuItemClickListener { item ->
                 val currentUrl = guide.savedUrl.ifBlank { guide.url }
                 when (item.title.toString()) {
+                    "Save named checkpoint" -> {
+                        val field = EditText(this@MainActivity).apply {
+                            hint = "e.g. Boss Fight"
+                            setSingleLine(true)
+                            setPadding(dp(20), dp(12), dp(20), dp(12))
+                        }
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("New checkpoint")
+                            .setView(field)
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Save") { _, _ ->
+                                val name = field.text.toString().trim()
+                                if (name.isNotEmpty()) {
+                                    val id = "n_" + java.util.UUID.randomUUID().toString().replace("-", "")
+                                    val all = try { JSONArray(prefs.getString("named_checkpoints_${guide.id}", "[]")) } catch (_: Exception) { JSONArray() }
+                                    all.put(JSONObject().put("id", id).put("name", name).put("url", currentUrl.substringBefore("#")))
+                                    prefs.edit().putString("named_checkpoints_${guide.id}", all.toString()).apply()
+                                    geckoSession?.loadUri(currentUrl.substringBefore("#") + "#ggcp-save-" + id)
+                                    Toast.makeText(this@MainActivity, "Saved: $name", Toast.LENGTH_SHORT).show()
+                                }
+                            }.show()
+                        true
+                    }
+                    "Manage checkpoints" -> {
+                        showNamedCheckpoints(guide)
+                        true
+                    }
                     "Save chapter checkpoint" -> {
                         // Separate from automatic position and session state.
                         prefs.edit().putString(checkpointKey, currentUrl.substringBefore("#")).apply()
