@@ -9,7 +9,7 @@
   let restoreAttempts = 0;
 
   function clean(value) {
-    return (value || "").replace(/\\s+/g, " ").trim();
+    return (value || "").replace(/\s+/g, " ").trim();
   }
 
   function blocks() {
