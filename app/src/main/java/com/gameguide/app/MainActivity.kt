@@ -968,6 +968,23 @@ class MainActivity : Activity() {
         pendingLoadUrl = if (guide.savedUrl.isNotBlank()) guide.savedUrl else guide.url
 
         session.setNavigationDelegate(object : GeckoSession.NavigationDelegate {
+            // IGN can navigate between chapters without a traditional page load.
+            // Location changes also cover same-document history navigation.
+            override fun onLocationChange(
+                session: GeckoSession,
+                url: String?,
+                perms: List<GeckoSession.PermissionDelegate.ContentPermission>,
+                hasUserGesture: Boolean
+            ) {
+                if (!url.isNullOrBlank() && (url.startsWith("https://") || url.startsWith("http://"))) {
+                    if (guide.savedUrl != url) {
+                        guide.savedUrl = url
+                        saveGuides()
+                        Log.d("GameGuide", "Saved current chapter: $url")
+                    }
+                }
+            }
+
             override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
                 backButton?.isEnabled = canGoBack
                 backButton?.alpha = if (canGoBack) 1f else 0.45f
