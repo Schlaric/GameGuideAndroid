@@ -111,6 +111,37 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(scheduleSave, 900);
   }, { passive: true });
+  // Manual checkpoints live in a separate extension-storage namespace.
+  // The Android menu issues a same-document fragment navigation; no native
+  // script injection and no changes to the automatic progress key are needed.
+  const checkpointKey = "gameguide-manual-checkpoint:" + location.origin + location.pathname;
+  function checkpointCommand() {
+    const hash = location.hash || "";
+    if (!hash.startsWith("#ggcp-save-") && !hash.startsWith("#ggcp-open-")) return;
+    const saving = hash.startsWith("#ggcp-save-");
+    // Remove the command from the visible URL without navigating away.
+    history.replaceState(history.state, "", location.pathname + location.search);
+    if (!browser.storage || !browser.storage.local) return;
+    if (saving) {
+      const block = currentBlock();
+      if (block) browser.storage.local.set({ [checkpointKey]: makeAnchor(block) });
+    } else {
+      browser.storage.local.get(checkpointKey).then(result => {
+        const saved = result[checkpointKey];
+        if (!saved) return;
+        let tries = 0;
+        const jump = () => {
+          if (restore(saved) || ++tries >= 12) return;
+          setTimeout(jump, 450);
+        };
+        // A manual jump is intentional, even if the user already interacted.
+        userInteracted = false;
+        jump();
+      });
+    }
+  }
+  window.addEventListener("hashchange", checkpointCommand);
+  checkpointCommand();
   window.addEventListener("pagehide", saveNow);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") saveNow();
