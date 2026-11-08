@@ -11,8 +11,8 @@ android {
         applicationId = "com.gameguide.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "2.23"
+        versionCode = 25
+        versionName = "2.24"
     }
 
     compileOptions {
@@ -24,9 +24,22 @@ android {
         jvmTarget = "17"
     }
 
+    signingConfigs {
+        create("gameguide") {
+            storeFile = rootProject.file("gameguide-release.jks")
+            storePassword = System.getenv("GAMEGUIDE_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("GAMEGUIDE_KEY_ALIAS")
+            keyPassword = System.getenv("GAMEGUIDE_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("gameguide")
+        }
         getByName("release") {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("gameguide")
         }
     }
 
