@@ -23,6 +23,13 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    // uBlock requires the _locales directory. Android's default asset
+    // ignore pattern excludes directories beginning with "_", so omit
+    // that one default rule while keeping the other standard exclusions.
+    androidResources {
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }
 }
 
 dependencies {
