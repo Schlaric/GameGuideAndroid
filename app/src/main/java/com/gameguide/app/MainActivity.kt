@@ -711,6 +711,14 @@ class MainActivity : Activity() {
             }
         }
         toolbar.addView(backButton)
+        toolbar.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
+            textSize = 11f
+            minHeight = dp(36)
+            setPadding(dp(8), 0, dp(8), 0)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
+                leftMargin = dp(5)
+            }
+        })
         toolbar.addView(styledButton("↻ Reset") {
             AlertDialog.Builder(this@MainActivity)
                 .setTitle("Reset walkthrough?")
@@ -733,20 +741,6 @@ class MainActivity : Activity() {
             }
         })
         header.addView(toolbar)
-
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        actions.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
-            textSize = 11f
-            minHeight = dp(36)
-            setPadding(dp(12), 0, dp(12), 0)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)
-            )
-        })
-        header.addView(actions)
         root.addView(header, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(2) })
