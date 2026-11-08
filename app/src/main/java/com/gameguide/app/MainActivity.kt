@@ -900,61 +900,76 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        // Put the Library action first; browser history navigation is clearly
-        // labeled separately so it cannot be mistaken for returning to Library.
-        toolbar.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
-            textSize = 11f
-            minHeight = dp(36)
-            setPadding(dp(8), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
-                rightMargin = dp(5)
+        // Compact reading controls; destructive/reset actions live in overflow.
+        val toolbarButton = { symbol: String, description: String, action: () -> Unit ->
+            styledButton(symbol, false, action).apply {
+                textSize = 19f
+                minWidth = 0
+                minHeight = 0
+                setPadding(0, 0, 0, 0)
+                contentDescription = description
+                layoutParams = LinearLayout.LayoutParams(dp(43), dp(43)).apply {
+                    rightMargin = dp(5)
+                }
             }
+        }
+        toolbar.addView(toolbarButton("⌂", "Back to library") {
+            saveCurrentSpot { showLibrary() }
         })
-        backButton = styledButton("Previous webpage") {
+        backButton = toolbarButton("‹", "Previous webpage") {
             geckoSession?.goBack()
         }.apply {
-            textSize = 11f
-            minHeight = dp(36)
-            setPadding(dp(8), 0, dp(8), 0)
             isEnabled = false
             alpha = 0.45f
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
-                rightMargin = dp(5)
-            }
         }
         toolbar.addView(backButton)
-        toolbar.addView(styledButton("↻ Reset") {
-            AlertDialog.Builder(this@MainActivity)
-                .setTitle("Reset walkthrough?")
-                .setMessage("Return to the original walkthrough page for ${guide.title}?")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Reset") { _, _ ->
-                    guide.savedUrl = ""
-                    guide.savedSessionState = ""
-                    guide.scrollY = 0
-                    saveGuides()
-                    geckoSession?.purgeHistory()
-                    geckoSession?.loadUri(guide.url)
-                }.show()
-        }.apply {
-            textSize = 11f
-            minHeight = dp(36)
-            setPadding(dp(8), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
-                leftMargin = dp(5)
-            }
-        })
-        fullscreenButton = styledButton("⛶ Full") {
+        val guideTitle = TextView(this).apply {
+            text = guide.title
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(5), 0, dp(5), 0)
+        }
+        toolbar.addView(guideTitle, LinearLayout.LayoutParams(0, dp(43), 1f))
+        fullscreenButton = toolbarButton("⛶", "Toggle fullscreen") {
             setFullscreen(!isFullscreen)
-        }.apply {
-            textSize = 11f
-            minHeight = dp(36)
-            setPadding(dp(8), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
-                leftMargin = dp(5)
-            }
         }
         toolbar.addView(fullscreenButton)
+        val overflow = toolbarButton("⋮", "Walkthrough options") { }
+        overflow.setOnClickListener { anchor ->
+            val menu = android.widget.PopupMenu(this@MainActivity, anchor)
+            menu.menu.add(if (isFullscreen) "Exit fullscreen" else "Enter fullscreen")
+            menu.menu.add("Reset to first chapter")
+            menu.setOnMenuItemClickListener { item ->
+                when (item.title.toString()) {
+                    "Enter fullscreen", "Exit fullscreen" -> {
+                        setFullscreen(!isFullscreen)
+                        true
+                    }
+                    "Reset to first chapter" -> {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Reset walkthrough?")
+                            .setMessage("Return to the original walkthrough page for ${guide.title}?")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Reset") { _, _ ->
+                                guide.savedUrl = ""
+                                guide.savedSessionState = ""
+                                guide.scrollY = 0
+                                saveGuides()
+                                geckoSession?.purgeHistory()
+                                geckoSession?.loadUri(guide.url)
+                            }.show()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            menu.show()
+        }
+        toolbar.addView(overflow)
         header.addView(toolbar)
         walkthroughHeader = header
         root.addView(header, LinearLayout.LayoutParams(
