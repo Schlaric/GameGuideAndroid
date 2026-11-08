@@ -1,10 +1,10 @@
 # GameGuide
 
-**A dedicated Android walkthrough reader for IGN game guides.** Keep your favorite walkthroughs in a cover-art library, pick up exactly where you stopped, and save named checkpoints for bosses, collectibles, and quests.
+**A dedicated Android walkthrough reader for game guides from across the web.** Keep your favorite walkthroughs in a cover-art library, pick up exactly where you stopped, and save named checkpoints for bosses, collectibles, and quests.
 
 ## Features
 
-- **Walkthrough library:** Organize your IGN guides with game cover artwork.
+- **Walkthrough library:** Organize your favorite game guides with game cover artwork.
 - **Continue Reading:** Automatically remember your latest chapter and reading position.
 - **Named checkpoints:** Save multiple named bookmarks for specific paragraphs, and open, rename, or delete them later.
 - **Built-in ad blocking:** Includes uBlock Origin in the GeckoView-powered reader.
@@ -19,7 +19,7 @@ For updates, install the new APK over the existing app to retain your library an
 
 ## Notes
 
-GameGuide is an independent, unofficial reader for publicly accessible IGN walkthroughs. It is not affiliated with or endorsed by IGN. Guide content remains on IGN's website and requires an internet connection.
+GameGuide is an independent, unofficial reader for publicly accessible game walkthroughs. Guide content remains on its original website, and an internet connection is required. GameGuide is not affiliated with or endorsed by the websites it displays.
 
 ## Build
 
