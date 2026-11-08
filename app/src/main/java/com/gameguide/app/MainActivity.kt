@@ -590,7 +590,7 @@ class MainActivity : Activity() {
         activeGuide = guide
         root = baseLayout()
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        header.addView(button("← Library") { saveCurrentSpot(); showLibrary() })
+        header.addView(button("← Library") { saveCurrentSpot { showLibrary() } })
         header.addView(button("SAVE SPOT") { saveCurrentSpot() })
         header.addView(button("Open in browser") {
             val url = guide.savedUrl.ifBlank { guide.url }
@@ -648,9 +648,9 @@ class MainActivity : Activity() {
         flushPendingLoad()
     }
 
-    private fun saveCurrentSpot() {
-        val guide = activeGuide ?: return
-        val session = geckoSession ?: return
+    private fun saveCurrentSpot(afterSave: (() -> Unit)? = null) {
+        val guide = activeGuide ?: run { afterSave?.invoke(); return }
+        val session = geckoSession ?: run { afterSave?.invoke(); return }
         session.evaluateJS(
             "JSON.stringify({url: window.location.href, y: Math.max(0, Math.round(window.scrollY || document.documentElement.scrollTop || 0))})"
         ).accept(
@@ -661,14 +661,16 @@ class MainActivity : Activity() {
                     guide.scrollY = state.optInt("y", guide.scrollY).coerceAtLeast(0)
                     saveGuides()
                     runOnUiThread {
-                        Toast.makeText(this, "Reading position saved!", Toast.LENGTH_SHORT).show()
+                        if (afterSave == null) Toast.makeText(this, "Reading position saved!", Toast.LENGTH_SHORT).show()
+                        afterSave?.invoke()
                     }
                 } catch (e: Exception) {
                     Log.w("GameGuide", "Could not read current page position", e)
                     guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
                     saveGuides()
                     runOnUiThread {
-                        Toast.makeText(this, "Page saved, but its scroll position couldn't be read.", Toast.LENGTH_LONG).show()
+                        if (afterSave == null) Toast.makeText(this, "Page saved, but its scroll position couldn't be read.", Toast.LENGTH_LONG).show()
+                        afterSave?.invoke()
                     }
                 }
             },
@@ -677,7 +679,8 @@ class MainActivity : Activity() {
                 guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
                 saveGuides()
                 runOnUiThread {
-                    Toast.makeText(this, "Page saved, but its scroll position couldn't be read.", Toast.LENGTH_LONG).show()
+                    if (afterSave == null) Toast.makeText(this, "Page saved, but its scroll position couldn't be read.", Toast.LENGTH_LONG).show()
+                    afterSave?.invoke()
                 }
             }
         )
@@ -735,8 +738,7 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android")
     override fun onBackPressed() {
         if (activeGuide != null) {
-            saveCurrentSpot()
-            showLibrary()
+            saveCurrentSpot { showLibrary() }
         } else super.onBackPressed()
     }
 
