@@ -953,13 +953,14 @@ class MainActivity : Activity() {
                 when (item.title.toString()) {
                     "Save chapter checkpoint" -> {
                         // Separate from automatic position and session state.
-                        prefs.edit().putString(checkpointKey, currentUrl).apply()
-                        Toast.makeText(this@MainActivity, "Chapter checkpoint saved", Toast.LENGTH_SHORT).show()
+                        prefs.edit().putString(checkpointKey, currentUrl.substringBefore("#")).apply()
+                        geckoSession?.loadUri(currentUrl.substringBefore("#") + "#ggcp-save-" + System.currentTimeMillis())
+                        Toast.makeText(this@MainActivity, "Checkpoint requested", Toast.LENGTH_SHORT).show()
                         true
                     }
                     "Open saved checkpoint" -> {
                         val saved = prefs.getString(checkpointKey, null)
-                        if (!saved.isNullOrBlank()) geckoSession?.loadUri(saved)
+                        if (!saved.isNullOrBlank()) geckoSession?.loadUri(saved.substringBefore("#") + "#ggcp-open-" + System.currentTimeMillis())
                         true
                     }
                     "Open in browser" -> {
