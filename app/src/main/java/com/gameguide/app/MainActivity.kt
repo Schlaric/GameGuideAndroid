@@ -58,6 +58,7 @@ class MainActivity : Activity() {
     private var geckoSession: GeckoSession? = null
     private var activeGuide: Guide? = null
     private var browserReady = false
+    private var pendingBrowserInstalls = 2
     private var pendingLoadUrl: String? = null
     private var pendingScrollSave: Runnable? = null
     private var pendingAfterSessionSave: (() -> Unit)? = null
@@ -77,7 +78,7 @@ class MainActivity : Activity() {
     private val browserStartupTimeout = Runnable {
         if (!browserReady) {
             browserReady = true
-            browserStartupStatus = "uBlock startup timed out; opening without ad blocking."
+            browserStartupStatus = "Browser extension startup timed out; opening anyway."
             Log.w("GameGuide", browserStartupStatus)
             Toast.makeText(this, browserStartupStatus, Toast.LENGTH_LONG).show()
             flushPendingLoad()
@@ -141,41 +142,59 @@ class MainActivity : Activity() {
     private fun initializeBrowser() {
         try {
             if (runtime == null) runtime = GeckoRuntime.create(this)
-            browserStartupStatus = "Installing uBlock Origin…"
-            Log.i("GameGuide", "Starting built-in uBlock installation")
-            // Never let a stuck WebExtension install prevent the walkthrough itself from opening.
+            browserStartupStatus = "Preparing browser extensions…"
+            Log.i("GameGuide", "Starting built-in browser extensions")
+            // Give both extensions a short startup window, but never block the walkthrough indefinitely.
             mainHandler.postDelayed(browserStartupTimeout, 8000)
+
             runtime!!.webExtensionController
                 .ensureBuiltIn("resource://android/assets/ublock/", "uBlock0@raymondhill.net")
                 .accept(
                     { extension ->
-                        mainHandler.removeCallbacks(browserStartupTimeout)
-                        browserReady = true
-                        browserStartupStatus = "uBlock is installed and ready."
                         Log.i("GameGuide", "uBlock ready: ${extension?.id ?: "unknown extension"}")
-                        runOnUiThread { flushPendingLoad() }
+                        runOnUiThread { finishBrowserInstall() }
                     },
                     { error ->
-                        mainHandler.removeCallbacks(browserStartupTimeout)
-                        browserReady = true
-                        browserStartupStatus = "uBlock failed to start: ${error?.message ?: "unknown error"}"
                         if (error != null) Log.e("GameGuide", "uBlock installation failed", error)
                         runOnUiThread {
                             Toast.makeText(
                                 this,
-                                "$browserStartupStatus Pages will open without ad blocking.",
+                                "uBlock could not start. Walkthroughs will still open.",
                                 Toast.LENGTH_LONG
                             ).show()
-                            flushPendingLoad()
+                            finishBrowserInstall()
                         }
+                    }
+                )
+
+            runtime!!.webExtensionController
+                .ensureBuiltIn("resource://android/assets/readerposition/", "readerposition@gameguide.app")
+                .accept(
+                    { extension ->
+                        Log.i("GameGuide", "Reading-position extension ready: ${extension?.id ?: "unknown extension"}")
+                        runOnUiThread { finishBrowserInstall() }
+                    },
+                    { error ->
+                        if (error != null) Log.e("GameGuide", "Reading-position extension installation failed", error)
+                        runOnUiThread { finishBrowserInstall() }
                     }
                 )
         } catch (e: Exception) {
             mainHandler.removeCallbacks(browserStartupTimeout)
             browserReady = true
-            browserStartupStatus = "uBlock startup error: ${e.message ?: "unknown error"}"
-            Log.e("GameGuide", "Browser startup failed; continuing without uBlock", e)
-            Toast.makeText(this, "$browserStartupStatus Pages will open without ad blocking.", Toast.LENGTH_LONG).show()
+            browserStartupStatus = "Browser startup error: ${e.message ?: "unknown error"}"
+            Log.e("GameGuide", "Browser startup failed; continuing", e)
+            Toast.makeText(this, browserStartupStatus, Toast.LENGTH_LONG).show()
+            flushPendingLoad()
+        }
+    }
+
+    private fun finishBrowserInstall() {
+        if (pendingBrowserInstalls > 0) pendingBrowserInstalls--
+        if (pendingBrowserInstalls == 0 && !browserReady) {
+            mainHandler.removeCallbacks(browserStartupTimeout)
+            browserReady = true
+            browserStartupStatus = "Browser extensions ready."
             flushPendingLoad()
         }
     }
@@ -185,23 +204,10 @@ class MainActivity : Activity() {
         val url = pendingLoadUrl ?: return
         val session = geckoSession ?: return
         pendingLoadUrl = null
-        // GeckoView session snapshots include scroll position, zoom, form data,
-        // and navigation history. Restore them when available; otherwise load fresh.
-        val guide = activeGuide
-        val savedState = guide?.savedSessionState
-        val restored = try {
-            savedState?.takeIf { it.isNotBlank() }?.let {
-                GeckoSession.SessionState.fromString(it)
-            }
-        } catch (e: Exception) {
-            Log.w("GameGuide", "Saved browser state could not be restored; loading URL instead", e)
-            null
-        }
-        if (restored != null) {
-            session.restoreState(restored)
-        } else {
-            session.loadUri(url)
-        }
+        // Always load the saved article URL fresh. The built-in reading-position
+        // extension restores by matching article text, not by replaying a stale
+        // pixel offset or browser session snapshot that may no longer line up.
+        session.loadUri(url)
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
