@@ -36,7 +36,9 @@
       text: text.slice(0, 180),
       prefix: previous,
       tag: el.tagName.toLowerCase(),
-      // Store the position relative to the viewport, not raw screen pixels.\n      viewportFraction: Math.max(-1, Math.min(1, rect.top / window.innerHeight)),\n      offset: Math.round(rect.top),
+      // Store the position relative to the viewport, not raw screen pixels.
+      viewportFraction: Math.max(-1, Math.min(1, rect.top / window.innerHeight)),
+      offset: Math.round(rect.top),
       savedAt: Date.now()
     };
   }
@@ -76,14 +78,18 @@
       }
       if (best) return best;
     }
-    // Never jump to an unrelated paragraph if the original text is absent.\n    return null;
+    // Never jump to an unrelated paragraph if the original text is absent.
+    return null;
   }
 
   function restore(saved) {
     if (!saved || userInteracted) return false;
     const el = findAnchor(saved);
     if (!el) return false;
-    const desiredOffset = Number.isFinite(Number(saved.viewportFraction))\n      ? Number(saved.viewportFraction) * window.innerHeight\n      : Math.min(Number(saved.offset || 0), window.innerHeight * 0.6);\n    const top = window.scrollY + el.getBoundingClientRect().top - desiredOffset;
+    const desiredOffset = Number.isFinite(Number(saved.viewportFraction))
+      ? Number(saved.viewportFraction) * window.innerHeight
+      : Math.min(Number(saved.offset || 0), window.innerHeight * 0.6);
+    const top = window.scrollY + el.getBoundingClientRect().top - desiredOffset;
     window.scrollTo(0, Math.max(0, top));
     return true;
   }
@@ -98,7 +104,13 @@
   ["wheel", "touchstart", "pointerdown", "keydown"].forEach(type => {
     window.addEventListener(type, markInteraction, { passive: true, capture: true });
   });
-  window.addEventListener("scroll", scheduleSave, { passive: true });\n  // Reflow on fold/unfold changes paragraph geometry; wait for it to settle.\n  let resizeTimer = null;\n  window.addEventListener("resize", () => {\n    clearTimeout(resizeTimer);\n    resizeTimer = setTimeout(scheduleSave, 900);\n  }, { passive: true });
+  window.addEventListener("scroll", scheduleSave, { passive: true });
+  // Reflow on fold/unfold changes paragraph geometry; wait for it to settle.
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(scheduleSave, 900);
+  }, { passive: true });
   window.addEventListener("pagehide", saveNow);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") saveNow();
