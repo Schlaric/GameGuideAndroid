@@ -11,8 +11,8 @@ android {
         applicationId = "com.gameguide.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "2.4"
+        versionCode = 7
+        versionName = "2.5"
     }
 
     compileOptions {
@@ -22,6 +22,26 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH")
+                ?: error("ANDROID_KEYSTORE_PATH is not configured"))
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                ?: error("ANDROID_KEYSTORE_PASSWORD is not configured")
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                ?: error("ANDROID_KEY_ALIAS is not configured")
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                ?: error("ANDROID_KEY_PASSWORD is not configured")
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
     }
 
     // uBlock requires the _locales directory. Android's default asset
