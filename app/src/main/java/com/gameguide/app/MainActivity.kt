@@ -941,12 +941,41 @@ class MainActivity : Activity() {
         val overflow = toolbarButton("⋮", "Walkthrough options") { }
         overflow.setOnClickListener { anchor ->
             val menu = android.widget.PopupMenu(this@MainActivity, anchor)
-            menu.menu.add(if (isFullscreen) "Exit fullscreen" else "Enter fullscreen")
+            val checkpointKey = "checkpoint_url_${guide.id}"
+            val checkpointUrl = prefs.getString(checkpointKey, null)
+            menu.menu.add("Save chapter checkpoint")
+            if (!checkpointUrl.isNullOrBlank()) menu.menu.add("Open saved checkpoint")
+            menu.menu.add("Open in browser")
+            menu.menu.add("Share current page")
             menu.menu.add("Reset to first chapter")
             menu.setOnMenuItemClickListener { item ->
+                val currentUrl = guide.savedUrl.ifBlank { guide.url }
                 when (item.title.toString()) {
-                    "Enter fullscreen", "Exit fullscreen" -> {
-                        setFullscreen(!isFullscreen)
+                    "Save chapter checkpoint" -> {
+                        // Separate from automatic position and session state.
+                        prefs.edit().putString(checkpointKey, currentUrl).apply()
+                        Toast.makeText(this@MainActivity, "Chapter checkpoint saved", Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                    "Open saved checkpoint" -> {
+                        val saved = prefs.getString(checkpointKey, null)
+                        if (!saved.isNullOrBlank()) geckoSession?.loadUri(saved)
+                        true
+                    }
+                    "Open in browser" -> {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl)))
+                        } catch (_: Exception) {
+                            Toast.makeText(this@MainActivity, "No browser available", Toast.LENGTH_SHORT).show()
+                        }
+                        true
+                    }
+                    "Share current page" -> {
+                        val share = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, currentUrl)
+                        }
+                        startActivity(Intent.createChooser(share, "Share walkthrough"))
                         true
                     }
                     "Reset to first chapter" -> {
