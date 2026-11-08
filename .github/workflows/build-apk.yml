@@ -39,14 +39,14 @@ jobs:
           manifest_path = Path("app/src/main/assets/ublock/manifest.json")
           manifest = json.loads(manifest_path.read_text())
           # GeckoView implements a smaller WebExtension permission schema than Firefox.
+          # Keep the core APIs uBlock Origin needs and that GeckoView implements.
+          # GeckoView does not implement the Firefox UI menus API; publicSuffix
+          # is optional to uBO's request-blocking path and is omitted here.
           supported = {
               "activeTab", "alarms", "cookies", "dns", "geckoViewAddons",
               "nativeMessagingFromContent", "storage", "unlimitedStorage",
-              "webRequest", "webRequestBlocking", "webRequestAuthProvider",
-              "webRequestFilterResponse", "webRequestFilterResponse.serviceWorkerScript",
-              "idle", "scripting", "mozillaAddons", "activityLog",
-              "networkStatus", "telemetry", "contextualIdentities",
-              "declarativeNetRequestWithHostAccess", "theme"
+              "tabs", "privacy", "webNavigation", "webRequest",
+              "webRequestBlocking", "idle"
           }
           original = manifest.get("permissions", [])
           manifest["permissions"] = [p for p in original if p in supported or p.startswith(("http://", "https://")) or p == "<all_urls>"]
@@ -58,6 +58,10 @@ jobs:
           gecko.pop("data_collection_permissions", None)
           print("Original uBO permissions:", original)
           print("GeckoView-compatible permissions:", manifest["permissions"])
+          required = {"storage", "webRequest", "webRequestBlocking", "<all_urls>"}
+          missing = required.difference(manifest["permissions"])
+          if missing:
+              raise SystemExit(f"Missing critical uBO permissions: {sorted(missing)}")
           manifest_path.write_text(json.dumps(manifest, indent=2))
           PY
       - name: Build debug APK
