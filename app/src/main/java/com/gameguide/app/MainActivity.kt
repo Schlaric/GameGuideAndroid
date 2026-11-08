@@ -133,7 +133,7 @@ class MainActivity : Activity() {
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         }
         window.decorView.systemUiVisibility = flags
-        fullscreenButton?.text = if (enabled) "⛶ Exit" else "⛶ Full"
+        fullscreenButton?.text = "⛶"
         root.requestLayout()
         root.requestApplyInsets()
         geckoView?.requestLayout()
