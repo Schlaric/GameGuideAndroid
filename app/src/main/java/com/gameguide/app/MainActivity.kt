@@ -77,12 +77,10 @@ class MainActivity : Activity() {
         val url = pendingLoadUrl ?: return
         val session = geckoSession ?: return
         pendingLoadUrl = null
-        val guide = activeGuide
-        val savedState = guide?.savedSessionState.orEmpty()
-        val restored = if (savedState.isNotBlank()) {
-            try { GeckoSession.SessionState.fromString(savedState) } catch (_: Exception) { null }
-        } else null
-        if (restored != null) session.restoreState(restored) else session.loadUri(url)
+        // Always start a fresh navigation. Restoring a previously saved
+        // GeckoSession state can leave the embedded browser stuck loading.
+        activeGuide?.savedSessionState = ""
+        session.loadUri(url)
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
