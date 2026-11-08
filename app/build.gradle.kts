@@ -11,8 +11,8 @@ android {
         applicationId = "com.gameguide.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 33
-        versionName = "2.32"
+        versionCode = 34
+        versionName = "2.33"
     }
 
     compileOptions {
