@@ -12,6 +12,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.content.Intent
+import android.content.res.Configuration
+import android.view.View
 import android.view.Gravity
 import android.os.Bundle
 import android.os.Build
@@ -59,6 +61,9 @@ class MainActivity : Activity() {
     private var browserStartupStatus = "Preparing browser…"
     private var coverPickerCallback: ((String) -> Unit)? = null
     private var backButton: Button? = null
+    private var walkthroughHeader: LinearLayout? = null
+    private var fullscreenButton: Button? = null
+    private var isFullscreen = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val browserStartupTimeout = Runnable {
         if (!browserReady) {
@@ -93,6 +98,34 @@ class MainActivity : Activity() {
         loadGuides()
         initializeBrowser()
         showLibrary()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Keep the existing Activity and GeckoSession alive when a Fold changes
+        // orientation or switches between folded and unfolded screen sizes.
+        root?.requestLayout()
+        geckoView?.requestLayout()
+    }
+
+    private fun setFullscreen(enabled: Boolean) {
+        isFullscreen = enabled
+        walkthroughHeader?.visibility = if (enabled) View.GONE else View.VISIBLE
+        root.setPadding(if (enabled) 0 else dp(8), if (enabled) 0 else dp(4), if (enabled) 0 else dp(8), 0)
+        val flags = if (enabled) {
+            (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
+        } else {
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        }
+        window.decorView.systemUiVisibility = flags
+        fullscreenButton?.text = if (enabled) "⛶ Exit" else "⛶ Full"
+        root.requestLayout()
+        geckoView?.requestLayout()
     }
 
     private fun initializeBrowser() {
@@ -785,7 +818,19 @@ class MainActivity : Activity() {
                 leftMargin = dp(5)
             }
         })
+        fullscreenButton = styledButton("⛶ Full") {
+            setFullscreen(!isFullscreen)
+        }.apply {
+            textSize = 11f
+            minHeight = dp(36)
+            setPadding(dp(8), 0, dp(8), 0)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
+                leftMargin = dp(5)
+            }
+        }
+        toolbar.addView(fullscreenButton)
         header.addView(toolbar)
+        walkthroughHeader = header
         root.addView(header, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(2) })
