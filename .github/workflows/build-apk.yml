@@ -77,9 +77,8 @@ jobs:
         env:
           GAMEGUIDE_KEYSTORE_PASSWORD: ${{ secrets.GAMEGUIDE_KEYSTORE_PASSWORD }}
           GAMEGUIDE_KEY_ALIAS: ${{ secrets.GAMEGUIDE_KEY_ALIAS }}
-          GAMEGUIDE_KEY_PASSWORD: ${{ secrets.GAMEGUIDE_KEY_PASSWORD }}
         run: |
-          if [ -z "$GAMEGUIDE_KEYSTORE_PASSWORD" ] || [ -z "$GAMEGUIDE_KEY_ALIAS" ] || [ -z "$GAMEGUIDE_KEY_PASSWORD" ]; then
+          if [ -z "$GAMEGUIDE_KEYSTORE_PASSWORD" ] || [ -z "$GAMEGUIDE_KEY_ALIAS" ]; then
             echo "::error::Missing one or more GameGuide signing secrets"
             exit 1
           fi
