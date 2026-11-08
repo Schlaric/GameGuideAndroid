@@ -127,7 +127,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view v2.43 >/dev/null 2>&1 && { echo "Release already exists"; exit 0; }
-          gh release create v2.43 app/build/outputs/apk/debug/app-debug.apk#GameGuide-2.43.apk \
-            --target "$GITHUB_SHA" \\
-            --title "GameGuide 2.43" \\
-            --notes "GameGuide 2.43 introduces a simplified checkpoint menu with Save Checkpoint and My Checkpoints. Existing named and legacy checkpoints remain accessible. Automatic reading progress is unchanged. The APK is signed with the existing GameGuide signing key and can be installed over the previous version."
+          gh release create v2.43 "app/build/outputs/apk/debug/app-debug.apk#GameGuide-2.43.apk" --target "$GITHUB_SHA" --title "GameGuide 2.43" --notes "GameGuide 2.43 simplifies checkpoint management with Save Checkpoint and My Checkpoints. Existing checkpoints and automatic reading progress are preserved."
