@@ -721,8 +721,8 @@ class MainActivity : Activity() {
                     guide.savedSessionState = ""
                     guide.scrollY = 0
                     saveGuides()
-                    session.purgeHistory()
-                    session.loadUri(guide.url)
+                    geckoSession?.purgeHistory()
+                    geckoSession?.loadUri(guide.url)
                 }.show()
         }.apply {
             textSize = 11f
