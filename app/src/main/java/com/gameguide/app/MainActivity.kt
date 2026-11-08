@@ -23,6 +23,7 @@ import android.util.Log
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.ScrollView
@@ -63,6 +64,7 @@ class MainActivity : Activity() {
     private var backButton: Button? = null
     private var walkthroughHeader: LinearLayout? = null
     private var fullscreenButton: Button? = null
+    private var fullscreenExitButton: Button? = null
     private var isFullscreen = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val browserStartupTimeout = Runnable {
@@ -111,6 +113,7 @@ class MainActivity : Activity() {
     private fun setFullscreen(enabled: Boolean) {
         isFullscreen = enabled
         walkthroughHeader?.visibility = if (enabled) View.GONE else View.VISIBLE
+        fullscreenExitButton?.visibility = if (enabled) View.VISIBLE else View.GONE
         root.setPadding(if (enabled) 0 else dp(8), if (enabled) 0 else dp(4), if (enabled) 0 else dp(8), 0)
         val flags = if (enabled) {
             (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -125,6 +128,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = flags
         fullscreenButton?.text = if (enabled) "⛶ Exit" else "⛶ Full"
         root.requestLayout()
+        root.requestApplyInsets()
         geckoView?.requestLayout()
     }
 
@@ -208,12 +212,16 @@ class MainActivity : Activity() {
         // navigation area instead of letting text draw underneath them.
         if (Build.VERSION.SDK_INT >= 35) {
             setOnApplyWindowInsetsListener { view, insets ->
-                view.setPadding(
-                    side + insets.systemWindowInsetLeft,
-                    top + insets.systemWindowInsetTop,
-                    side + insets.systemWindowInsetRight,
-                    bottom + insets.systemWindowInsetBottom
-                )
+                if (isFullscreen) {
+                    view.setPadding(0, 0, 0, 0)
+                } else {
+                    view.setPadding(
+                        side + insets.systemWindowInsetLeft,
+                        top + insets.systemWindowInsetTop,
+                        side + insets.systemWindowInsetRight,
+                        bottom + insets.systemWindowInsetBottom
+                    )
+                }
                 insets
             }
         }
@@ -863,7 +871,25 @@ class MainActivity : Activity() {
         session.open(runtime!!)
         view.setSession(session)
 
-        root.addView(view, LinearLayout.LayoutParams(
+        val browserFrame = FrameLayout(this)
+        browserFrame.addView(view, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        fullscreenExitButton = styledButton("✕  Exit fullscreen", true) {
+            setFullscreen(false)
+        }.apply {
+            textSize = 12f
+            minHeight = dp(42)
+            elevation = dp(10).toFloat()
+            visibility = View.GONE
+        }
+        browserFrame.addView(fullscreenExitButton, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(44), Gravity.TOP or Gravity.END
+        ).apply {
+            topMargin = dp(12)
+            marginEnd = dp(12)
+        })
+        root.addView(browserFrame, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
         setContentView(root)
