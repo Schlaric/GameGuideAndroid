@@ -1021,7 +1021,7 @@ class MainActivity : Activity() {
                 perms: List<GeckoSession.PermissionDelegate.ContentPermission>,
                 hasUserGesture: Boolean
             ) {
-                if (!url.isNullOrBlank() && (url.startsWith("https://") || url.startsWith("http://"))) {
+                if (!url.isNullOrBlank() && !url.contains("#ggcp-") && (url.startsWith("https://") || url.startsWith("http://"))) {
                     if (guide.savedUrl != url) {
                         guide.savedUrl = url
                         saveGuides()
@@ -1051,6 +1051,7 @@ class MainActivity : Activity() {
 
         session.setProgressDelegate(object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
+                if (url.contains("#ggcp-")) return
                 if (guide.savedUrl.isNotBlank() && guide.savedUrl != url) {
                     guide.scrollY = 0
                     guide.savedSessionState = ""
