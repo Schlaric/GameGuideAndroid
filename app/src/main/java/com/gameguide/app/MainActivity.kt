@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -121,7 +122,25 @@ class MainActivity : Activity() {
     private fun baseLayout(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(Color.rgb(15, 18, 26))
-        setPadding(dp(18), dp(16), dp(18), dp(12))
+        val side = dp(18)
+        val top = dp(16)
+        val bottom = dp(12)
+        setPadding(side, top, side, bottom)
+
+        // Android 15 enforces edge-to-edge for apps targeting SDK 35.
+        // Keep the library/header below the status bar and above the
+        // navigation area instead of letting text draw underneath them.
+        if (Build.VERSION.SDK_INT >= 35) {
+            setOnApplyWindowInsetsListener { view, insets ->
+                view.setPadding(
+                    side + insets.systemWindowInsetLeft,
+                    top + insets.systemWindowInsetTop,
+                    side + insets.systemWindowInsetRight,
+                    bottom + insets.systemWindowInsetBottom
+                )
+                insets
+            }
+        }
     }
 
     private fun text(value: String, size: Float, color: Int = Color.WHITE): TextView =
