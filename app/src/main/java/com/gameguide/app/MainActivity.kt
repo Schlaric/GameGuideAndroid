@@ -89,10 +89,26 @@ class MainActivity : Activity() {
                 .accept(
                     { extension ->
                         mainHandler.removeCallbacks(browserStartupTimeout)
-                        browserReady = true
-                        browserStartupStatus = "uBlock is installed and ready."
+                        browserStartupStatus = "uBlock is ready; preparing IGN reader mode…"
                         Log.i("GameGuide", "uBlock ready: ${extension?.id ?: "unknown extension"}")
-                        runOnUiThread { flushPendingLoad() }
+                        runtime!!.webExtensionController
+                            .ensureBuiltIn("resource://android/assets/reader/", "reader@gameguide.app")
+                            .accept(
+                                { readerExtension ->
+                                    mainHandler.removeCallbacks(browserStartupTimeout)
+                                    browserReady = true
+                                    browserStartupStatus = "uBlock and IGN reader mode are ready."
+                                    Log.i("GameGuide", "Reader mode ready: ${readerExtension?.id ?: "unknown extension"}")
+                                    runOnUiThread { flushPendingLoad() }
+                                },
+                                { readerError ->
+                                    mainHandler.removeCallbacks(browserStartupTimeout)
+                                    browserReady = true
+                                    browserStartupStatus = "uBlock is ready; reader mode unavailable."
+                                    Log.w("GameGuide", browserStartupStatus, readerError)
+                                    runOnUiThread { flushPendingLoad() }
+                                }
+                            )
                     },
                     { error ->
                         mainHandler.removeCallbacks(browserStartupTimeout)
