@@ -126,7 +126,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(sed -n 's/.*versionName = "\\([^"]*\\)".*/\\1/p' app/build.gradle.kts | head -n 1)
+          VERSION=$(awk -F '"' '/versionName[[:space:]]*=/ {print $2; exit}' app/build.gradle.kts)
           if [ -z "$VERSION" ]; then echo "Could not determine app version"; exit 1; fi
           TAG="v$VERSION"
           if gh release view "$TAG" >/dev/null 2>&1; then
