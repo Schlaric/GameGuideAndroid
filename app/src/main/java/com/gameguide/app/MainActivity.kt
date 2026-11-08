@@ -661,6 +661,17 @@ class MainActivity : Activity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)
             ).apply { leftMargin = dp(6) }
         })
+        toolbar.addView(styledButton("Open") {
+            val url = guide.savedUrl.ifBlank { guide.url }
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.apply {
+            textSize = 11f
+            minHeight = dp(38)
+            setPadding(dp(8), 0, dp(8), 0)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)
+            ).apply { leftMargin = dp(6) }
+        })
         header.addView(toolbar)
         header.addView(text(guide.title, 17f).apply {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
