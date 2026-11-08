@@ -38,12 +38,26 @@ jobs:
           from pathlib import Path
           manifest_path = Path("app/src/main/assets/ublock/manifest.json")
           manifest = json.loads(manifest_path.read_text())
-          manifest["permissions"] = [
-              p for p in manifest.get("permissions", [])
-              if p not in ("menus", "publicSuffix")
-          ]
+          # GeckoView implements a smaller WebExtension permission schema than Firefox.
+          supported = {
+              "activeTab", "alarms", "cookies", "dns", "geckoViewAddons",
+              "nativeMessagingFromContent", "storage", "unlimitedStorage",
+              "webRequest", "webRequestBlocking", "webRequestAuthProvider",
+              "webRequestFilterResponse", "webRequestFilterResponse.serviceWorkerScript",
+              "idle", "scripting", "mozillaAddons", "activityLog",
+              "networkStatus", "telemetry", "contextualIdentities",
+              "declarativeNetRequestWithHostAccess", "theme"
+          }
+          original = manifest.get("permissions", [])
+          manifest["permissions"] = [p for p in original if p in supported or p.startswith(("http://", "https://")) or p == "<all_urls>"]
           manifest.pop("commands", None)
           manifest.pop("sidebar_action", None)
+          # Keep Gecko-specific identity/version, but remove optional metadata
+          # that may not be understood by older embedded GeckoView builds.
+          gecko = manifest.get("browser_specific_settings", {}).get("gecko", {})
+          gecko.pop("data_collection_permissions", None)
+          print("Original uBO permissions:", original)
+          print("GeckoView-compatible permissions:", manifest["permissions"])
           manifest_path.write_text(json.dumps(manifest, indent=2))
           PY
       - name: Build debug APK
