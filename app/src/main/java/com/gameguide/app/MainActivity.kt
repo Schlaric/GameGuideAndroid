@@ -3,6 +3,11 @@ package com.gameguide.app
 import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -189,6 +194,138 @@ class MainActivity : Activity() {
             setOnClickListener { action() }
         }
 
+    private fun fetchBitmap(url: String): Bitmap? {
+        var connection: HttpURLConnection? = null
+        return try {
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 7000
+                readTimeout = 7000
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "GameGuideAndroid/2.9")
+            }
+            if (connection.responseCode !in 200..299) return null
+            connection.inputStream.use { BitmapFactory.decodeStream(it) }
+        } catch (e: Exception) {
+            Log.w("GameGuide", "Cover image download failed: $url", e)
+            null
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun loadCoverInto(url: String, target: ImageView) {
+        if (url.startsWith("content://") || url.startsWith("file://")) {
+            try { target.setImageURI(Uri.parse(url)) } catch (_: Exception) { }
+            return
+        }
+        Thread {
+            val bitmap = fetchBitmap(url)
+            if (bitmap != null) runOnUiThread {
+                if (target.isAttachedToWindow) target.setImageBitmap(bitmap)
+            }
+        }.start()
+    }
+
+    private fun showCoverSearch(onSelected: (String) -> Unit) {
+        val queryInput = EditText(this).apply {
+            hint = "Search a game title"
+            setSingleLine()
+        }
+        val results = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(8), 0, 0)
+        }
+        val resultScroll = ScrollView(this).apply {
+            addView(results)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(330)
+            )
+        }
+        val searchButton = styledButton("Search Steam games", true) {
+            val query = queryInput.text.toString().trim()
+            if (query.isBlank()) {
+                Toast.makeText(this, "Enter a game title first.", Toast.LENGTH_SHORT).show()
+            } else {
+                results.removeAllViews()
+                results.addView(text("Searching for games…", 14f, Color.LTGRAY))
+                Thread {
+                    val matches = mutableListOf<Triple<String, String, Bitmap?>>()
+                    try {
+                        val encoded = URLEncoder.encode(query, "UTF-8")
+                        val api = URL("https://store.steampowered.com/api/storesearch/?term=$encoded&l=english&cc=us")
+                        val connection = api.openConnection() as HttpURLConnection
+                        connection.connectTimeout = 8000
+                        connection.readTimeout = 8000
+                        connection.setRequestProperty("User-Agent", "GameGuideAndroid/2.9")
+                        val json = connection.inputStream.bufferedReader().use { it.readText() }
+                        connection.disconnect()
+                        val items = JSONObject(json).optJSONArray("items") ?: JSONArray()
+                        for (i in 0 until minOf(items.length(), 8)) {
+                            val item = items.getJSONObject(i)
+                            val id = item.optLong("id")
+                            val name = item.optString("name", "Unknown game")
+                            if (id <= 0) continue
+                            val base = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/$id/"
+                            var art = base + "library_600x900.jpg"
+                            var bitmap = fetchBitmap(art)
+                            if (bitmap == null) {
+                                art = "https://cdn.akamai.steamstatic.com/steam/apps/$id/header.jpg"
+                                bitmap = fetchBitmap(art)
+                            }
+                            if (bitmap != null) matches.add(Triple(name, art, bitmap))
+                        }
+                    } catch (e: Exception) {
+                        Log.e("GameGuide", "Cover art search failed", e)
+                    }
+                    runOnUiThread {
+                        results.removeAllViews()
+                        if (matches.isEmpty()) {
+                            results.addView(text("No artwork found. Try another title or use your gallery.", 14f, Color.LTGRAY))
+                        } else {
+                            matches.forEach { (name, art, bitmap) ->
+                                val itemRow = LinearLayout(this).apply {
+                                    orientation = LinearLayout.HORIZONTAL
+                                    gravity = Gravity.CENTER_VERTICAL
+                                    background = rounded(Color.rgb(27, 35, 49), 12)
+                                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                                    isClickable = true
+                                    isFocusable = true
+                                    setOnClickListener {
+                                        onSelected(art)
+                                        Toast.makeText(this@MainActivity, "Cover art selected.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                itemRow.addView(ImageView(this).apply {
+                                    setImageBitmap(bitmap)
+                                    scaleType = ImageView.ScaleType.CENTER_CROP
+                                    layoutParams = LinearLayout.LayoutParams(dp(62), dp(86))
+                                })
+                                itemRow.addView(text(name, 15f).apply {
+                                    setPadding(dp(12), 0, 0, 0)
+                                })
+                                results.addView(itemRow, LinearLayout.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                                ).apply { bottomMargin = dp(8) })
+                            }
+                        }
+                    }
+                }.start()
+            }
+        }
+        val searchBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), 0)
+            addView(queryInput)
+            addView(searchButton)
+            addView(resultScroll)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Find game cover art")
+            .setView(searchBox)
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
     private fun showLibrary() {
         geckoView?.releaseSession()
         geckoSession?.close()
@@ -269,9 +406,7 @@ class MainActivity : Activity() {
                 background = rounded(Color.rgb(43, 58, 83), 12)
                 clipToOutline = true
                 if (guide.coverUri.isNotBlank()) {
-                    try { setImageURI(Uri.parse(guide.coverUri)) } catch (_: Exception) {
-                        setImageResource(android.R.drawable.ic_menu_gallery)
-                    }
+                    loadCoverInto(guide.coverUri, this)
                 } else {
                     setImageResource(android.R.drawable.ic_menu_gallery)
                     setColorFilter(Color.rgb(155, 181, 225))
@@ -348,13 +483,19 @@ class MainActivity : Activity() {
                 bottomMargin = dp(8)
             }
             if (selectedCoverUri.isNotBlank()) {
-                try { setImageURI(Uri.parse(selectedCoverUri)) } catch (_: Exception) {}
+                loadCoverInto(selectedCoverUri, this)
             } else setImageResource(android.R.drawable.ic_menu_gallery)
+        }
+        val searchCoverButton = styledButton("Search for cover art online") {
+            showCoverSearch { art ->
+                selectedCoverUri = art
+                loadCoverInto(art, coverPreview)
+            }
         }
         val coverButton = styledButton("Choose cover art from gallery") {
             coverPickerCallback = { uri ->
                 selectedCoverUri = uri
-                try { coverPreview.setImageURI(Uri.parse(uri)) } catch (_: Exception) {}
+                loadCoverInto(uri, coverPreview)
             }
             val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
@@ -369,6 +510,7 @@ class MainActivity : Activity() {
             addView(titleInput)
             addView(urlInput)
             addView(coverPreview)
+            addView(searchCoverButton)
             addView(coverButton)
         }
         AlertDialog.Builder(this)
