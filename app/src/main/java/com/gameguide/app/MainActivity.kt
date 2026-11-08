@@ -728,18 +728,19 @@ class MainActivity : Activity() {
         toolbar.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
             textSize = 11f
             minHeight = dp(38)
-            setPadding(dp(8), 0, dp(8), 0)
+            setPadding(dp(6), 0, dp(6), 0)
+            layoutParams = LinearLayout.LayoutParams(0, dp(38), 1f)
         })
-                toolbar.addView(styledButton("Open in Browser") {
+        toolbar.addView(styledButton("Open in Browser") {
             val url = guide.savedUrl.ifBlank { guide.url }
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }.apply {
             textSize = 11f
             minHeight = dp(38)
-            setPadding(dp(8), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)
-            ).apply { leftMargin = dp(6) }
+            setPadding(dp(6), 0, dp(6), 0)
+            layoutParams = LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+                leftMargin = dp(6)
+            }
         })
         header.addView(toolbar)
         header.addView(text(guide.title, 17f).apply {
