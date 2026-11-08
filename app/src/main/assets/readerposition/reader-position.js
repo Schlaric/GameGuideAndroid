@@ -122,15 +122,18 @@
     if (!hash.startsWith("#ggcp-save-") && !hash.startsWith("#ggcp-open-")) return;
     const saving = hash.startsWith("#ggcp-save-");
     if (!saving) manualJump = true;
+    const commandId = hash.slice(saving ? "#ggcp-save-".length : "#ggcp-open-".length);
+    const named = commandId.startsWith("n_");
+    const storageKey = named ? "gameguide-named-checkpoint:" + commandId : checkpointKey;
     // Remove the command from the visible URL without navigating away.
     history.replaceState(history.state, "", location.pathname + location.search);
     if (!browser.storage || !browser.storage.local) return;
     if (saving) {
       const block = currentBlock();
-      if (block) browser.storage.local.set({ [checkpointKey]: makeAnchor(block) });
+      if (block) browser.storage.local.set({ [storageKey]: makeAnchor(block) });
     } else {
-      browser.storage.local.get(checkpointKey).then(result => {
-        const saved = result[checkpointKey];
+      browser.storage.local.get(storageKey).then(result => {
+        const saved = result[storageKey];
         if (!saved) return;
         let tries = 0;
         const jump = () => {
