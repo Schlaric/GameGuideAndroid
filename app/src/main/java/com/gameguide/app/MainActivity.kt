@@ -264,33 +264,46 @@ class MainActivity : Activity() {
                     val matches = mutableListOf<Triple<String, String, Bitmap>>()
                     val seen = mutableSetOf<String>()
 
-                    // Wikipedia/Wikimedia covers Nintendo and other games that are
-                    // not sold on Steam. Page thumbnails often use the game's box art.
+                    // Search using the actual title and reject unrelated page titles.
+                    // This stops "Ocarina of Time" returning the musical instrument.
                     try {
-                        val wikiQuery = URLEncoder.encode("$query video game", "UTF-8")
+                        val queryWords = query.lowercase().split(Regex("[^a-z0-9]+"))
+                            .filter { it.length > 2 && it !in setOf("the", "and", "for", "game", "edition") }.toSet()
+                        val wikiQuery = URLEncoder.encode("\"$query\" (video game OR videogame OR game)", "UTF-8")
                         val wikiUrl = URL(
                             "https://en.wikipedia.org/w/api.php?action=query&generator=search" +
-                                "&gsrsearch=$wikiQuery&gsrnamespace=0&gsrlimit=8" +
+                                "&gsrsearch=$wikiQuery&gsrnamespace=0&gsrlimit=20" +
                                 "&prop=pageimages&piprop=thumbnail&pithumbsize=420&format=json&origin=*"
                         )
                         val connection = wikiUrl.openConnection() as HttpURLConnection
                         connection.connectTimeout = 9000
                         connection.readTimeout = 9000
-                        connection.setRequestProperty("User-Agent", "GameGuideAndroid/2.11 (Android app)")
+                        connection.setRequestProperty("User-Agent", "GameGuideAndroid/2.12 (Android app)")
                         val json = connection.inputStream.bufferedReader().use { it.readText() }
                         connection.disconnect()
-                        val pages = JSONObject(json).optJSONObject("query")
-                            ?.optJSONObject("pages")
+                        val pages = JSONObject(json).optJSONObject("query")?.optJSONObject("pages")
+                        val candidates = mutableListOf<Pair<Double, JSONObject>>()
                         if (pages != null) {
                             val keys = pages.keys()
-                            while (keys.hasNext() && matches.size < 8) {
+                            while (keys.hasNext()) {
                                 val page = pages.getJSONObject(keys.next())
-                                val title = page.optString("title", "Game")
-                                val art = page.optJSONObject("thumbnail")?.optString("source").orEmpty()
-                                if (art.isNotBlank() && seen.add(art)) {
-                                    val bitmap = fetchBitmap(art)
-                                    if (bitmap != null) matches.add(Triple(title, art, bitmap))
-                                }
+                                val title = page.optString("title", "")
+                                val normalized = title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
+                                val titleWords = normalized.split(" ").filter { it.isNotBlank() }.toSet()
+                                val overlap = if (queryWords.isEmpty()) 0.0 else
+                                    queryWords.count { it in titleWords }.toDouble() / queryWords.size
+                                val exactPhrase = normalized.contains(query.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim())
+                                val score = overlap + if (exactPhrase) 1.0 else 0.0
+                                if (overlap >= 0.60) candidates.add(score to page)
+                            }
+                        }
+                        candidates.sortByDescending { it.first }
+                        for ((_, page) in candidates.take(8)) {
+                            val title = page.optString("title", "Game")
+                            val art = page.optJSONObject("thumbnail")?.optString("source").orEmpty()
+                            if (art.isNotBlank() && seen.add(art)) {
+                                val bitmap = fetchBitmap(art)
+                                if (bitmap != null) matches.add(Triple(title, art, bitmap))
                             }
                         }
                     } catch (e: Exception) {
@@ -308,10 +321,18 @@ class MainActivity : Activity() {
                         val json = connection.inputStream.bufferedReader().use { it.readText() }
                         connection.disconnect()
                         val items = JSONObject(json).optJSONArray("items") ?: JSONArray()
-                        for (i in 0 until minOf(items.length(), 8)) {
+                        val queryWords = query.lowercase().split(Regex("[^a-z0-9]+"))
+                            .filter { it.length > 2 && it !in setOf("the", "and", "for", "game", "edition") }.toSet()
+                        val ranked = (0 until items.length()).mapNotNull { i ->
                             val item = items.getJSONObject(i)
-                            val id = item.optLong("id")
                             val name = item.optString("name", "Unknown game")
+                            val words = name.lowercase().split(Regex("[^a-z0-9]+")).toSet()
+                            val overlap = if (queryWords.isEmpty()) 0.0 else
+                                queryWords.count { it in words }.toDouble() / queryWords.size
+                            if (overlap < 0.60) null else Triple(overlap, item, name)
+                        }.sortedByDescending { it.first }
+                        for ((_, item, name) in ranked.take(8)) {
+                            val id = item.optLong("id")
                             if (id <= 0) continue
                             var art = "https://cdn.akamai.steamstatic.com/steam/apps/$id/library_600x900.jpg"
                             if (seen.add(art)) {
@@ -601,19 +622,59 @@ class MainActivity : Activity() {
     private fun openGuide(guide: Guide) {
         activeGuide = guide
         root = baseLayout()
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        header.addView(button("← Library") { saveCurrentSpot { showLibrary() } })
-        header.addView(button("SAVE SPOT") { saveCurrentSpot() })
-        header.addView(button("Open in browser") {
-            val url = guide.savedUrl.ifBlank { guide.url }
-            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-        })
-        root.addView(header)
-        root.addView(text(guide.title, 18f).apply { setPadding(0, dp(5), 0, dp(4)) })
-        val pageStatus = text(browserStartupStatus, 12f, Color.LTGRAY).apply {
-            setPadding(0, 0, 0, dp(6))
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(Color.rgb(25, 33, 47), 18, Color.rgb(48, 62, 84))
+            setPadding(dp(12), dp(10), dp(12), dp(10))
         }
-        root.addView(pageStatus)
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        toolbar.addView(text("GG", 14f, Color.WHITE).apply {
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            background = rounded(Color.rgb(57, 112, 220), 10)
+            layoutParams = LinearLayout.LayoutParams(dp(38), dp(38))
+        })
+        toolbar.addView(LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(9), 0, dp(6), 0)
+            addView(text("GAMEGUIDE", 11f, Color.rgb(125, 170, 255)).apply {
+                typeface = Typeface.DEFAULT_BOLD
+                letterSpacing = 0.08f
+            })
+            addView(text("WALKTHROUGH MODE", 9f, Color.rgb(145, 157, 178)).apply {
+                letterSpacing = 0.04f
+            })
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        toolbar.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
+            textSize = 11f
+            minHeight = dp(38)
+            setPadding(dp(8), 0, dp(8), 0)
+        })
+        toolbar.addView(styledButton("Save spot", true) { saveCurrentSpot() }.apply {
+            textSize = 11f
+            minHeight = dp(38)
+            setPadding(dp(8), 0, dp(8), 0)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)
+            ).apply { leftMargin = dp(6) }
+        })
+        header.addView(toolbar)
+        header.addView(text(guide.title, 17f).apply {
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            maxLines = 2
+            setPadding(0, dp(12), 0, dp(5))
+        })
+        val pageStatus = text(browserStartupStatus, 10f, Color.rgb(145, 170, 205)).apply {
+            setPadding(0, 0, 0, dp(2))
+            maxLines = 1
+        }
+        header.addView(pageStatus)
+        root.addView(header, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(10) })
 
         val view = GeckoView(this)
         val session = GeckoSession()
