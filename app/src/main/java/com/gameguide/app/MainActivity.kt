@@ -449,47 +449,29 @@ class MainActivity : Activity() {
         root = baseLayout()
         root.setPadding(dp(18), dp(18), dp(18), dp(12))
 
-        val brand = LinearLayout(this).apply {
+        val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(text("GG", 15f, Color.WHITE).apply {
-                gravity = Gravity.CENTER
-                typeface = Typeface.DEFAULT_BOLD
-                background = rounded(Color.rgb(57, 112, 220), 12)
-                layoutParams = LinearLayout.LayoutParams(dp(42), dp(42))
+            addView(text("My games", 22f, Color.WHITE).apply {
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(11), 0, 0, 0)
-                addView(text("GAMEGUIDE", 13f, Color.rgb(125, 170, 255)).apply {
-                    typeface = Typeface.DEFAULT_BOLD
-                    letterSpacing = 0.12f
-                })
-                addView(text("YOUR GAME LIBRARY", 10f, Color.rgb(145, 157, 178)).apply {
-                    letterSpacing = 0.08f
-                })
+            addView(text("•••", 22f, Color.rgb(145, 157, 178)).apply {
+                gravity = Gravity.CENTER
+                background = rounded(Color.rgb(27, 35, 49), 12)
+                layoutParams = LinearLayout.LayoutParams(dp(44), dp(40))
+                setOnClickListener { showCoverSettings() }
             })
         }
-        root.addView(brand)
-        root.addView(text("Pick up where you left off.", 25f).apply {
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setPadding(0, dp(22), 0, dp(4))
-        })
-        root.addView(text("${guides.size} ${if (guides.size == 1) "WALKTHROUGH" else "WALKTHROUGHS"} SAVED", 11f, Color.rgb(145, 157, 178)).apply {
-            letterSpacing = 0.08f
-            setPadding(0, 0, 0, dp(16))
+        root.addView(topBar)
+        root.addView(text("${guides.size} ${if (guides.size == 1) "walkthrough" else "walkthroughs"} saved", 12f, Color.rgb(145, 157, 178)).apply {
+            setPadding(0, dp(3), 0, dp(14))
         })
         root.addView(styledButton("+   Add a game", true) { showAddDialog() }.apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply {
                 bottomMargin = dp(16)
             }
         })
-        root.addView(styledButton("⚙  Cover art settings", false) { showCoverSettings() }.apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
-                bottomMargin = dp(12)
-            }
-        })
-
         val scroll = ScrollView(this)
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -698,33 +680,23 @@ class MainActivity : Activity() {
 
     private fun openGuide(guide: Guide) {
         activeGuide = guide
-        root = baseLayout()
+        root = baseLayout().apply {
+            setPadding(dp(8), dp(4), dp(8), 0)
+        }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(Color.rgb(25, 33, 47), 18, Color.rgb(48, 62, 84))
-            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setPadding(dp(4), dp(2), dp(4), dp(6))
         }
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        toolbar.addView(text("GG", 14f, Color.WHITE).apply {
-            gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-            background = rounded(Color.rgb(57, 112, 220), 10)
-            layoutParams = LinearLayout.LayoutParams(dp(38), dp(38))
+        toolbar.addView(text(guide.title, 16f, Color.WHITE).apply {
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
-        toolbar.addView(LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(9), 0, dp(6), 0)
-            addView(text("GAMEGUIDE", 11f, Color.rgb(125, 170, 255)).apply {
-                typeface = Typeface.DEFAULT_BOLD
-                letterSpacing = 0.08f
-            })
-            addView(text("WALKTHROUGH MODE", 9f, Color.rgb(145, 157, 178)).apply {
-                letterSpacing = 0.04f
-            })
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         toolbar.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
             textSize = 11f
             minHeight = dp(38)
@@ -743,14 +715,9 @@ class MainActivity : Activity() {
             }
         })
         header.addView(toolbar)
-        header.addView(text(guide.title, 17f).apply {
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            maxLines = 2
-            setPadding(0, dp(12), 0, dp(5))
-        })
         root.addView(header, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(10) })
+        ).apply { bottomMargin = dp(2) })
 
         val view = GeckoView(this)
         val session = GeckoSession()
