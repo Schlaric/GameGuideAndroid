@@ -264,6 +264,49 @@ class MainActivity : Activity() {
                     val matches = mutableListOf<Triple<String, String, Bitmap>>()
                     val seen = mutableSetOf<String>()
 
+                    // SteamGridDB: search game titles, then fetch portrait game grids.
+                    // The API key is stored only in this app's private preferences.
+                    val apiKey = prefs.getString("steamgriddb_api_key", "").orEmpty().trim()
+                    if (apiKey.isNotBlank()) {
+                        try {
+                            val encoded = URLEncoder.encode(query, "UTF-8")
+                            val searchConnection = (URL("https://www.steamgriddb.com/api/v2/search/autocomplete/$encoded").openConnection() as HttpURLConnection).apply {
+                                connectTimeout = 9000
+                                readTimeout = 9000
+                                setRequestProperty("Authorization", "Bearer $apiKey")
+                                setRequestProperty("User-Agent", "GameGuideAndroid/2.14")
+                            }
+                            val searchJson = searchConnection.inputStream.bufferedReader().use { it.readText() }
+                            searchConnection.disconnect()
+                            val games = JSONObject(searchJson).optJSONArray("data") ?: JSONArray()
+                            for (i in 0 until minOf(games.length(), 8)) {
+                                val game = games.optJSONObject(i) ?: continue
+                                val gameId = game.optLong("id")
+                                val gameName = game.optString("name", "Game")
+                                if (gameId <= 0) continue
+                                val gridConnection = (URL("https://www.steamgriddb.com/api/v2/grids/game/$gameId?dimensions=600x900&types=static&nsfw=false").openConnection() as HttpURLConnection).apply {
+                                    connectTimeout = 9000
+                                    readTimeout = 9000
+                                    setRequestProperty("Authorization", "Bearer $apiKey")
+                                    setRequestProperty("User-Agent", "GameGuideAndroid/2.14")
+                                }
+                                val gridJson = gridConnection.inputStream.bufferedReader().use { it.readText() }
+                                gridConnection.disconnect()
+                                val grids = JSONObject(gridJson).optJSONArray("data") ?: JSONArray()
+                                for (j in 0 until minOf(grids.length(), 5)) {
+                                    val grid = grids.optJSONObject(j) ?: continue
+                                    val art = grid.optString("thumb").ifBlank { grid.optString("url") }
+                                    if (art.isBlank() || !seen.add(art)) continue
+                                    val bitmap = fetchBitmap(art)
+                                    if (bitmap != null) matches.add(Triple(gameName, art, bitmap))
+                                }
+                                if (matches.size >= 12) break
+                            }
+                        } catch (e: Exception) {
+                            Log.w("GameGuide", "SteamGridDB cover search failed", e)
+                        }
+                    }
+
                     // Search using the actual title and reject unrelated page titles.
                     // This stops "Ocarina of Time" returning the musical instrument.
                     try {
@@ -441,6 +484,11 @@ class MainActivity : Activity() {
                 bottomMargin = dp(16)
             }
         })
+        root.addView(styledButton("⚙  Cover art settings", false) { showCoverSettings() }.apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
+                bottomMargin = dp(12)
+            }
+        })
 
         val scroll = ScrollView(this)
         val list = LinearLayout(this).apply {
@@ -531,6 +579,35 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
         setContentView(root)
+    }
+
+    private fun showCoverSettings() {
+        val keyInput = EditText(this).apply {
+            hint = "SteamGridDB API key"
+            setSingleLine()
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(prefs.getString("steamgriddb_api_key", "").orEmpty())
+        }
+        val help = text("Create a free account at SteamGridDB, then generate an API key in Profile → Preferences. Paste it here; it stays on this device and is not added to the public GitHub project.", 13f, Color.LTGRAY)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(help)
+            addView(keyInput)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Cover art settings")
+            .setView(box)
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Clear key") { _, _ ->
+                prefs.edit().remove("steamgriddb_api_key").apply()
+                Toast.makeText(this, "SteamGridDB key cleared.", Toast.LENGTH_SHORT).show()
+            }
+            .setPositiveButton("Save key") { _, _ ->
+                prefs.edit().putString("steamgriddb_api_key", keyInput.text.toString().trim()).apply()
+                Toast.makeText(this, "SteamGridDB key saved on this device.", Toast.LENGTH_SHORT).show()
+            }
+            .show()
     }
 
     private fun showAddDialog(existing: Guide? = null) {
