@@ -99,6 +99,10 @@
     window.addEventListener(type, markInteraction, { passive: true, capture: true });
   });
   window.addEventListener("scroll", scheduleSave, { passive: true });
+  window.addEventListener("pagehide", saveNow);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveNow();
+  });
 
   if (!browser.storage || !browser.storage.local) return;
   browser.storage.local.get(key).then(result => {
