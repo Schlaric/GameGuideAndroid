@@ -1,0 +1,19 @@
+{
+  "manifest_version": 2,
+  "name": "GameGuide Reading Position",
+  "version": "1.0",
+  "description": "Remembers the article text position for GameGuide walkthroughs.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "readerposition@gameguide.app"
+    }
+  },
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["*://ign.com/*", "*://*.ign.com/*"],
+      "js": ["reader-position.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
