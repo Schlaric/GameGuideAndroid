@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -17,6 +19,8 @@ import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.util.Locale
 
 private data class Guide(
     val id: Long,
@@ -32,6 +36,28 @@ class MainActivity : Activity() {
     private var webView: WebView? = null
     private var activeGuide: Guide? = null
     private val prefs by lazy { getSharedPreferences("gameguide", MODE_PRIVATE) }
+
+    // Block common third-party advertising and tracking hosts without blocking IGN itself.
+    private val blockedAdDomains = setOf(
+        "doubleclick.net",
+        "googlesyndication.com",
+        "googleadservices.com",
+        "googletagservices.com",
+        "adnxs.com",
+        "adsrvr.org",
+        "criteo.com",
+        "taboola.com",
+        "outbrain.com",
+        "pubmatic.com",
+        "rubiconproject.com",
+        "openx.net",
+        "amazon-adsystem.com",
+        "advertising.com",
+        "scorecardresearch.com",
+        "quantserve.com",
+        "ads.ign.com",
+        "ad.ign.com"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -176,6 +202,17 @@ class MainActivity : Activity() {
 
     private fun showEditDialog(guide: Guide) = showAddDialog(guide)
 
+    private fun isBlockedAdUrl(url: String): Boolean {
+        val host = try {
+            android.net.Uri.parse(url).host?.lowercase(Locale.ROOT) ?: return false
+        } catch (_: Exception) {
+            return false
+        }
+        return blockedAdDomains.any { domain ->
+            host == domain || host.endsWith(".$domain")
+        }
+    }
+
     private fun openGuide(guide: Guide) {
         activeGuide = guide
         root = baseLayout()
@@ -196,6 +233,20 @@ class MainActivity : Activity() {
         browser.settings.loadsImagesAutomatically = true
         browser.webChromeClient = WebChromeClient()
         browser.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                if (isBlockedAdUrl(request.url.toString())) {
+                    return WebResourceResponse(
+                        "text/plain",
+                        "utf-8",
+                        204,
+                        "No Content",
+                        emptyMap(),
+                        ByteArrayInputStream(ByteArray(0))
+                    )
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
+
             override fun onPageFinished(view: WebView, url: String) {
                 if (guide.savedUrl == url && guide.scrollY > 0) {
                     view.postDelayed({ view.scrollTo(0, guide.scrollY) }, 500)
