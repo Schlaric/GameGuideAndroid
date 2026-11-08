@@ -64,6 +64,29 @@ jobs:
               raise SystemExit(f"Missing critical uBO permissions: {sorted(missing)}")
           manifest_path.write_text(json.dumps(manifest, indent=2))
           PY
+      - name: Generate launcher icons from approved GameGuide cover
+        run: |
+          python3 -m pip install --quiet Pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          source = Path("gameguide-icon.jpg")
+          if not source.is_file():
+              raise SystemExit("Approved icon image is missing")
+          image = Image.open(source).convert("RGB")
+          w, h = image.size
+          edge = min(w, h)
+          image = image.crop(((w-edge)//2, (h-edge)//2, (w+edge)//2, (h+edge)//2))
+          res = Path("app/src/main/res")
+          # Remove the previous adaptive launcher resource so Android uses
+          # the new full-cover artwork consistently at every density.
+          (res / "mipmap-anydpi-v26" / "ic_launcher.xml").unlink(missing_ok=True)
+          for density, size in {"mdpi":48, "hdpi":72, "xhdpi":96, "xxhdpi":144, "xxxhdpi":192}.items():
+              dest = res / ("mipmap-" + density)
+              dest.mkdir(parents=True, exist_ok=True)
+              image.resize((size, size), Image.Resampling.LANCZOS).save(dest / "ic_launcher.png")
+          print("Generated GameGuide launcher icons from", source)
+          PY
       - name: Decode persistent signing key
         env:
           GAMEGUIDE_KEYSTORE_BASE64: ${{ secrets.GAMEGUIDE_KEYSTORE_BASE64 }}
