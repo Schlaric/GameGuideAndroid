@@ -3,6 +3,11 @@ package com.gameguide.app
 import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.content.Intent
+import android.view.Gravity
 import android.os.Bundle
 import android.os.Build
 import android.os.Handler
@@ -12,6 +17,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -27,7 +33,8 @@ private data class Guide(
     var url: String,
     var savedUrl: String,
     var scrollY: Int,
-    var savedSessionState: String = ""
+    var savedSessionState: String = "",
+    var coverUri: String = ""
 )
 
 class MainActivity : Activity() {
@@ -43,6 +50,7 @@ class MainActivity : Activity() {
     private var browserReady = false
     private var pendingLoadUrl: String? = null
     private var browserStartupStatus = "Preparing browser…"
+    private var coverPickerCallback: ((String) -> Unit)? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val browserStartupTimeout = Runnable {
         if (!browserReady) {
@@ -157,6 +165,30 @@ class MainActivity : Activity() {
             setOnClickListener { action() }
         }
 
+    private fun rounded(color: Int, radius: Int, strokeColor: Int = Color.TRANSPARENT): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+            if (strokeColor != Color.TRANSPARENT) setStroke(dp(1), strokeColor)
+        }
+
+    private fun styledButton(label: String, primary: Boolean = false, action: () -> Unit): Button =
+        Button(this).apply {
+            text = label
+            isAllCaps = false
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(if (primary) Color.WHITE else Color.rgb(205, 215, 232))
+            background = rounded(
+                if (primary) Color.rgb(57, 112, 220) else Color.rgb(43, 52, 69),
+                12
+            )
+            stateListAnimator = null
+            minHeight = dp(42)
+            setPadding(dp(12), 0, dp(12), 0)
+            setOnClickListener { action() }
+        }
+
     private fun showLibrary() {
         geckoView?.releaseSession()
         geckoSession?.close()
@@ -164,49 +196,126 @@ class MainActivity : Activity() {
         geckoSession = null
         activeGuide = null
         root = baseLayout()
-        root.addView(text("GAMEGUIDE", 13f, Color.rgb(120, 170, 255)))
-        root.addView(text("Your walkthrough library", 27f).apply {
-            setPadding(0, dp(5), 0, dp(14))
+        root.setPadding(dp(18), dp(18), dp(18), dp(12))
+
+        val brand = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(text("GG", 15f, Color.WHITE).apply {
+                gravity = Gravity.CENTER
+                typeface = Typeface.DEFAULT_BOLD
+                background = rounded(Color.rgb(57, 112, 220), 12)
+                layoutParams = LinearLayout.LayoutParams(dp(42), dp(42))
+            })
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(11), 0, 0, 0)
+                addView(text("GAMEGUIDE", 13f, Color.rgb(125, 170, 255)).apply {
+                    typeface = Typeface.DEFAULT_BOLD
+                    letterSpacing = 0.12f
+                })
+                addView(text("YOUR GAME LIBRARY", 10f, Color.rgb(145, 157, 178)).apply {
+                    letterSpacing = 0.08f
+                })
+            })
+        }
+        root.addView(brand)
+        root.addView(text("Pick up where you left off.", 25f).apply {
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(0, dp(22), 0, dp(4))
         })
-        root.addView(button("+  Add walkthrough") { showAddDialog() })
+        root.addView(text("${guides.size} ${if (guides.size == 1) "WALKTHROUGH" else "WALKTHROUGHS"} SAVED", 11f, Color.rgb(145, 157, 178)).apply {
+            letterSpacing = 0.08f
+            setPadding(0, 0, 0, dp(16))
+        })
+        root.addView(styledButton("+   Add a game", true) { showAddDialog() }.apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply {
+                bottomMargin = dp(16)
+            }
+        })
 
         val scroll = ScrollView(this)
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(12), 0, 0)
+            setPadding(0, dp(2), 0, dp(8))
         }
         if (guides.isEmpty()) {
-            list.addView(text("No games yet. Add an IGN walkthrough URL to get started.", 16f, Color.LTGRAY).apply {
-                setPadding(dp(4), dp(20), dp(4), dp(20))
-            })
+            val empty = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                background = rounded(Color.rgb(25, 32, 45), 20, Color.rgb(48, 61, 82))
+                setPadding(dp(24), dp(34), dp(24), dp(34))
+                addView(text("＋", 36f, Color.rgb(125, 170, 255)).apply { gravity = Gravity.CENTER })
+                addView(text("Your library starts here", 19f).apply {
+                    gravity = Gravity.CENTER
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, dp(8), 0, dp(5))
+                })
+                addView(text("Add a game and its walkthrough. You can add cover art from your gallery.", 14f, Color.rgb(160, 172, 192)).apply {
+                    gravity = Gravity.CENTER
+                })
+            }
+            list.addView(empty)
         }
         guides.forEach { guide ->
             val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundColor(Color.rgb(29, 35, 48))
-                setPadding(dp(14), dp(12), dp(14), dp(10))
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = rounded(Color.rgb(27, 35, 49), 18, Color.rgb(47, 59, 79))
+                setPadding(dp(12), dp(12), dp(12), dp(12))
             }
-            card.addView(text(guide.title, 19f))
-            val progress = if (guide.savedUrl.isNotBlank()) "Saved spot available" else "Not started"
-            card.addView(text(progress, 13f, Color.LTGRAY).apply {
-                setPadding(0, dp(4), 0, dp(8))
+            val cover = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = rounded(Color.rgb(43, 58, 83), 12)
+                clipToOutline = true
+                if (guide.coverUri.isNotBlank()) {
+                    try { setImageURI(Uri.parse(guide.coverUri)) } catch (_: Exception) {
+                        setImageResource(android.R.drawable.ic_menu_gallery)
+                    }
+                } else {
+                    setImageResource(android.R.drawable.ic_menu_gallery)
+                    setColorFilter(Color.rgb(155, 181, 225))
+                }
+                layoutParams = LinearLayout.LayoutParams(dp(82), dp(112))
+            }
+            card.addView(cover)
+            val details = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(13), 0, 0, 0)
+            }
+            details.addView(text(guide.title, 17f).apply {
+                typeface = Typeface.DEFAULT_BOLD
+                maxLines = 2
             })
-            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            actions.addView(button(if (guide.savedUrl.isNotBlank()) "Continue" else "Open") {
+            val hasSpot = guide.savedUrl.isNotBlank()
+            details.addView(text(if (hasSpot) "●  SAVED SPOT" else "○  NOT STARTED", 10f,
+                if (hasSpot) Color.rgb(105, 213, 161) else Color.rgb(157, 169, 190)).apply {
+                typeface = Typeface.DEFAULT_BOLD
+                letterSpacing = 0.06f
+                setPadding(0, dp(7), 0, dp(11))
+            })
+            details.addView(styledButton(if (hasSpot) "Continue  →" else "Open walkthrough", true) {
                 openGuide(guide)
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            actions.addView(button("Edit") { showEditDialog(guide) })
-            actions.addView(button("Remove") {
-                AlertDialog.Builder(this@MainActivity)
-                    .setMessage("Remove ${guide.title} from your library?")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Remove") { _, _ ->
-                        guides.remove(guide)
-                        saveGuides()
-                        showLibrary()
-                    }.show()
             })
-            card.addView(actions)
+            val tools = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(5), 0, 0)
+                addView(styledButton("Edit", false) { showEditDialog(guide) })
+                addView(styledButton("Remove", false) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage("Remove ${guide.title} from your library?")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Remove") { _, _ ->
+                            guides.remove(guide)
+                            saveGuides()
+                            showLibrary()
+                        }.show()
+                }.apply { setPadding(dp(8), 0, dp(8), 0) }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { leftMargin = dp(6) })
+            }
+            details.addView(tools)
+            card.addView(details, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             list.addView(card, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(12) })
@@ -229,11 +338,38 @@ class MainActivity : Activity() {
             setSingleLine()
             setText(existing?.url ?: "")
         }
+        var selectedCoverUri = existing?.coverUri ?: ""
+        val coverPreview = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = rounded(Color.rgb(38, 50, 70), 10)
+            clipToOutline = true
+            layoutParams = LinearLayout.LayoutParams(dp(76), dp(104)).apply {
+                topMargin = dp(10)
+                bottomMargin = dp(8)
+            }
+            if (selectedCoverUri.isNotBlank()) {
+                try { setImageURI(Uri.parse(selectedCoverUri)) } catch (_: Exception) {}
+            } else setImageResource(android.R.drawable.ic_menu_gallery)
+        }
+        val coverButton = styledButton("Choose cover art from gallery") {
+            coverPickerCallback = { uri ->
+                selectedCoverUri = uri
+                try { coverPreview.setImageURI(Uri.parse(uri)) } catch (_: Exception) {}
+            }
+            val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "image/*"
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            }
+            startActivityForResult(pick, 501)
+        }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
             addView(titleInput)
             addView(urlInput)
+            addView(coverPreview)
+            addView(coverButton)
         }
         AlertDialog.Builder(this)
             .setTitle(if (existing == null) "Add walkthrough" else "Edit walkthrough")
@@ -250,13 +386,14 @@ class MainActivity : Activity() {
                             return@setOnClickListener
                         }
                         if (!url.startsWith("https://") && !url.startsWith("http://")) url = "https://$url"
-                        if (existing == null) guides.add(Guide(System.currentTimeMillis(), title, url, "", 0))
+                        if (existing == null) guides.add(Guide(System.currentTimeMillis(), title, url, "", 0, coverUri = selectedCoverUri))
                         else {
                             existing.title = title
                             existing.url = url
                             existing.savedUrl = ""
                             existing.scrollY = 0
                             existing.savedSessionState = ""
+                            existing.coverUri = selectedCoverUri
                         }
                         saveGuides()
                         dialog.dismiss()
@@ -339,6 +476,19 @@ class MainActivity : Activity() {
         Toast.makeText(this, "Spot saved!", Toast.LENGTH_SHORT).show()
     }
 
+    @Deprecated("Deprecated in Android")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 501 && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            try {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) { }
+            coverPickerCallback?.invoke(uri.toString())
+            coverPickerCallback = null
+        }
+    }
+
     private fun saveGuides() {
         val array = JSONArray()
         guides.forEach { guide ->
@@ -349,6 +499,7 @@ class MainActivity : Activity() {
                 put("savedUrl", guide.savedUrl)
                 put("scrollY", guide.scrollY)
                 put("savedSessionState", guide.savedSessionState)
+                put("coverUri", guide.coverUri)
             })
         }
         prefs.edit().putString("guides", array.toString()).apply()
@@ -367,7 +518,8 @@ class MainActivity : Activity() {
                     item.optString("url"),
                     item.optString("savedUrl"),
                     item.optInt("scrollY"),
-                    item.optString("savedSessionState", "")
+                    item.optString("savedSessionState", ""),
+                    item.optString("coverUri", "")
                 ))
             }
         } catch (_: Exception) { }
