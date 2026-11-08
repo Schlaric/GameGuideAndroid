@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.gameguide.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.gameguide.app"
@@ -26,5 +26,5 @@ android {
 }
 
 dependencies {
-    implementation("org.mozilla.geckoview:geckoview:144.0.20251027123126")
+    implementation("org.mozilla.geckoview:geckoview-arm64-v8a:144.0.20251027123126")
 }
