@@ -230,7 +230,11 @@ class MainActivity : Activity() {
             startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
         })
         root.addView(header)
-        root.addView(text(guide.title, 18f).apply { setPadding(0, dp(5), 0, dp(8)) })
+        root.addView(text(guide.title, 18f).apply { setPadding(0, dp(5), 0, dp(4)) })
+        val pageStatus = text("Preparing browser…", 12f, Color.LTGRAY).apply {
+            setPadding(0, 0, 0, dp(6))
+        }
+        root.addView(pageStatus)
 
         val view = GeckoView(this)
         val session = GeckoSession()
@@ -238,11 +242,27 @@ class MainActivity : Activity() {
         geckoSession = session
         pendingLoadUrl = if (guide.savedUrl.isNotBlank()) guide.savedUrl else guide.url
 
-        session.setContentDelegate(object : GeckoSession.ContentDelegate {})
+        session.setContentDelegate(object : GeckoSession.ContentDelegate {
+            override fun onTitleChange(session: GeckoSession, title: String?) {
+                pageStatus.text = title?.takeIf { it.isNotBlank() } ?: "Page loaded (no title)"
+                android.util.Log.d("GameGuide", "Page title: $title")
+            }
+        })
         session.setProgressDelegate(object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
                 guide.savedUrl = url
                 saveGuides()
+                pageStatus.text = "Loading: $url"
+                android.util.Log.d("GameGuide", "Page started: $url")
+            }
+
+            override fun onPageStop(session: GeckoSession, success: Boolean) {
+                pageStatus.text = if (success) "Page load finished. If the area below is blank, the site rendered no visible content." else "Page load failed. Check connection or site compatibility."
+                android.util.Log.d("GameGuide", "Page stopped; success=$success")
+            }
+
+            override fun onProgressChange(session: GeckoSession, progress: Int) {
+                if (progress < 100) pageStatus.text = "Loading page… $progress%"
             }
 
             override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {
