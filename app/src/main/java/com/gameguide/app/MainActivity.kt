@@ -228,7 +228,7 @@ class MainActivity : Activity() {
 
     private fun showCoverSearch(onSelected: (String) -> Unit) {
         val queryInput = EditText(this).apply {
-            hint = "Search a game title"
+            hint = "Search any game (Zelda, Mario, etc.)"
             setSingleLine()
         }
         val results = LinearLayout(this).apply {
@@ -238,25 +238,61 @@ class MainActivity : Activity() {
         val resultScroll = ScrollView(this).apply {
             addView(results)
             layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(330)
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(360)
             )
         }
-        val searchButton = styledButton("Search Steam games", true) {
+        val searchButton = styledButton("Search online", true) {
             val query = queryInput.text.toString().trim()
             if (query.isBlank()) {
                 Toast.makeText(this, "Enter a game title first.", Toast.LENGTH_SHORT).show()
             } else {
                 results.removeAllViews()
-                results.addView(text("Searching for games…", 14f, Color.LTGRAY))
+                results.addView(text("Searching game databases…", 14f, Color.LTGRAY))
                 Thread {
-                    val matches = mutableListOf<Triple<String, String, Bitmap?>>()
+                    val matches = mutableListOf<Triple<String, String, Bitmap>>()
+                    val seen = mutableSetOf<String>()
+
+                    // Wikipedia/Wikimedia covers Nintendo and other games that are
+                    // not sold on Steam. Page thumbnails often use the game's box art.
+                    try {
+                        val wikiQuery = URLEncoder.encode("$query video game", "UTF-8")
+                        val wikiUrl = URL(
+                            "https://en.wikipedia.org/w/api.php?action=query&generator=search" +
+                                "&gsrsearch=$wikiQuery&gsrnamespace=0&gsrlimit=8" +
+                                "&prop=pageimages&piprop=thumbnail&pithumbsize=420&format=json&origin=*"
+                        )
+                        val connection = wikiUrl.openConnection() as HttpURLConnection
+                        connection.connectTimeout = 9000
+                        connection.readTimeout = 9000
+                        connection.setRequestProperty("User-Agent", "GameGuideAndroid/2.11 (Android app)")
+                        val json = connection.inputStream.bufferedReader().use { it.readText() }
+                        connection.disconnect()
+                        val pages = JSONObject(json).optJSONObject("query")
+                            ?.optJSONObject("pages")
+                        if (pages != null) {
+                            val keys = pages.keys()
+                            while (keys.hasNext() && matches.size < 8) {
+                                val page = pages.getJSONObject(keys.next())
+                                val title = page.optString("title", "Game")
+                                val art = page.optJSONObject("thumbnail")?.optString("source").orEmpty()
+                                if (art.isNotBlank() && seen.add(art)) {
+                                    val bitmap = fetchBitmap(art)
+                                    if (bitmap != null) matches.add(Triple(title, art, bitmap))
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w("GameGuide", "Wikipedia cover search failed", e)
+                    }
+
+                    // Keep Steam as a second source for PC games and alternate artwork.
                     try {
                         val encoded = URLEncoder.encode(query, "UTF-8")
                         val api = URL("https://store.steampowered.com/api/storesearch/?term=$encoded&l=english&cc=us")
                         val connection = api.openConnection() as HttpURLConnection
                         connection.connectTimeout = 8000
                         connection.readTimeout = 8000
-                        connection.setRequestProperty("User-Agent", "GameGuideAndroid/2.9")
+                        connection.setRequestProperty("User-Agent", "GameGuideAndroid/2.11")
                         val json = connection.inputStream.bufferedReader().use { it.readText() }
                         connection.disconnect()
                         val items = JSONObject(json).optJSONArray("items") ?: JSONArray()
@@ -265,22 +301,21 @@ class MainActivity : Activity() {
                             val id = item.optLong("id")
                             val name = item.optString("name", "Unknown game")
                             if (id <= 0) continue
-                            val base = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/$id/"
-                            var art = base + "library_600x900.jpg"
-                            var bitmap = fetchBitmap(art)
-                            if (bitmap == null) {
-                                art = "https://cdn.akamai.steamstatic.com/steam/apps/$id/header.jpg"
-                                bitmap = fetchBitmap(art)
+                            val art = "https://cdn.akamai.steamstatic.com/steam/apps/$id/library_600x900.jpg"
+                            if (seen.add(art)) {
+                                val bitmap = fetchBitmap(art)
+                                    ?: fetchBitmap("https://cdn.akamai.steamstatic.com/steam/apps/$id/header.jpg")
+                                if (bitmap != null) matches.add(Triple(name, art, bitmap))
                             }
-                            if (bitmap != null) matches.add(Triple(name, art, bitmap))
                         }
                     } catch (e: Exception) {
-                        Log.e("GameGuide", "Cover art search failed", e)
+                        Log.w("GameGuide", "Steam cover search failed", e)
                     }
+
                     runOnUiThread {
                         results.removeAllViews()
                         if (matches.isEmpty()) {
-                            results.addView(text("No artwork found. Try another title or use your gallery.", 14f, Color.LTGRAY))
+                            results.addView(text("No artwork found. Try a more specific title or use your gallery.", 14f, Color.LTGRAY))
                         } else {
                             matches.forEach { (name, art, bitmap) ->
                                 val itemRow = LinearLayout(this).apply {
@@ -613,9 +648,36 @@ class MainActivity : Activity() {
     private fun saveCurrentSpot() {
         val guide = activeGuide ?: return
         val session = geckoSession ?: return
-        if (guide.savedUrl.isBlank()) guide.savedUrl = guide.url
-        saveGuides()
-        Toast.makeText(this, "Spot saved!", Toast.LENGTH_SHORT).show()
+        session.evaluateJS(
+            "JSON.stringify({url: window.location.href, y: Math.max(0, Math.round(window.scrollY || document.documentElement.scrollTop || 0))})"
+        ).accept(
+            { value ->
+                try {
+                    val state = JSONObject(value as? String ?: value.toString())
+                    guide.savedUrl = state.optString("url").ifBlank { guide.savedUrl.ifBlank { guide.url } }
+                    guide.scrollY = state.optInt("y", guide.scrollY).coerceAtLeast(0)
+                    saveGuides()
+                    runOnUiThread {
+                        Toast.makeText(this, "Reading position saved!", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Log.w("GameGuide", "Could not read current page position", e)
+                    guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
+                    saveGuides()
+                    runOnUiThread {
+                        Toast.makeText(this, "Page saved, but its scroll position couldn't be read.", Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
+            { error ->
+                Log.w("GameGuide", "Saving reading position failed", error)
+                guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
+                saveGuides()
+                runOnUiThread {
+                    Toast.makeText(this, "Page saved, but its scroll position couldn't be read.", Toast.LENGTH_LONG).show()
+                }
+            }
+        )
     }
 
     @Deprecated("Deprecated in Android")
