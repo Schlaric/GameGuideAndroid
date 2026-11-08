@@ -56,6 +56,7 @@ class MainActivity : Activity() {
     private var pendingLoadUrl: String? = null
     private var browserStartupStatus = "Preparing browser…"
     private var coverPickerCallback: ((String) -> Unit)? = null
+    private var backButton: Button? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val browserStartupTimeout = Runnable {
         if (!browserReady) {
@@ -697,24 +698,64 @@ class MainActivity : Activity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
-        toolbar.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
+        backButton = styledButton("← Back") {
+            geckoSession?.goBack()
+        }.apply {
             textSize = 11f
-            minHeight = dp(38)
-            setPadding(dp(6), 0, dp(6), 0)
-            layoutParams = LinearLayout.LayoutParams(0, dp(38), 1f)
+            minHeight = dp(36)
+            setPadding(dp(8), 0, dp(8), 0)
+            isEnabled = false
+            alpha = 0.45f
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
+                leftMargin = dp(5)
+            }
+        }
+        toolbar.addView(backButton)
+        toolbar.addView(styledButton("↻ Reset") {
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("Reset walkthrough?")
+                .setMessage("Return to the original walkthrough page for ${guide.title}?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Reset") { _, _ ->
+                    guide.savedUrl = ""
+                    guide.savedSessionState = ""
+                    guide.scrollY = 0
+                    saveGuides()
+                    session.purgeHistory()
+                    session.loadUri(guide.url)
+                }.show()
+        }.apply {
+            textSize = 11f
+            minHeight = dp(36)
+            setPadding(dp(8), 0, dp(8), 0)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
+                leftMargin = dp(5)
+            }
         })
-        toolbar.addView(styledButton("Open in Browser") {
+        header.addView(toolbar)
+
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        actions.addView(styledButton("Library") { saveCurrentSpot { showLibrary() } }.apply {
+            textSize = 11f
+            minHeight = dp(36)
+            setPadding(dp(6), 0, dp(6), 0)
+            layoutParams = LinearLayout.LayoutParams(0, dp(36), 1f)
+        })
+        actions.addView(styledButton("Open in Browser") {
             val url = guide.savedUrl.ifBlank { guide.url }
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }.apply {
             textSize = 11f
-            minHeight = dp(38)
+            minHeight = dp(36)
             setPadding(dp(6), 0, dp(6), 0)
-            layoutParams = LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+            layoutParams = LinearLayout.LayoutParams(0, dp(36), 1f).apply {
                 leftMargin = dp(6)
             }
         })
-        header.addView(toolbar)
+        header.addView(actions)
         root.addView(header, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(2) })
@@ -724,6 +765,13 @@ class MainActivity : Activity() {
         geckoView = view
         geckoSession = session
         pendingLoadUrl = if (guide.savedUrl.isNotBlank()) guide.savedUrl else guide.url
+
+        session.setNavigationDelegate(object : GeckoSession.NavigationDelegate {
+            override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
+                backButton?.isEnabled = canGoBack
+                backButton?.alpha = if (canGoBack) 1f else 0.45f
+            }
+        })
 
         session.setProgressDelegate(object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
