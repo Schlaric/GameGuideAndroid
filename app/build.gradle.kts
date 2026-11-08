@@ -29,7 +29,8 @@ android {
             storeFile = rootProject.file("gameguide-release.jks")
             storePassword = System.getenv("GAMEGUIDE_KEYSTORE_PASSWORD")
             keyAlias = System.getenv("GAMEGUIDE_KEY_ALIAS")
-            keyPassword = System.getenv("GAMEGUIDE_KEY_PASSWORD")
+            // PKCS12 stores use the keystore password for the private key as well.
+            keyPassword = storePassword
         }
     }
 
