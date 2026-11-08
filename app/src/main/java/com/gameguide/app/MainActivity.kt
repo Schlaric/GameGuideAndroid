@@ -36,7 +36,7 @@ class MainActivity : Activity() {
     private var geckoView: GeckoView? = null
     private var geckoSession: GeckoSession? = null
     private var activeGuide: Guide? = null
-    private var uBlockReady = false
+    private var browserReady = false
     private var pendingLoadUrl: String? = null
     private val prefs by lazy { getSharedPreferences("gameguide", MODE_PRIVATE) }
 
@@ -56,25 +56,33 @@ class MainActivity : Activity() {
                 .ensureBuiltIn("resource://android/assets/ublock/", "uBlock0@raymondhill.net")
                 .accept(
                     {
-                        uBlockReady = true
-                        val url = pendingLoadUrl
-                        if (url != null) {
-                            pendingLoadUrl = null
-                            geckoSession?.loadUri(url)
-                        }
+                        browserReady = true
+                        flushPendingLoad()
                     },
                     {
-                        Toast.makeText(this, "uBlock Origin could not start: ${it?.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
-                        val url = pendingLoadUrl
-                        if (url != null) {
-                            pendingLoadUrl = null
-                            geckoSession?.loadUri(url)
-                        }
+                        browserReady = true
+                        Toast.makeText(this, "uBlock Origin could not start: ${it?.message ?: "unknown error"}. Pages will still open without blocking.", Toast.LENGTH_LONG).show()
+                        flushPendingLoad()
                     }
                 )
         } catch (e: Exception) {
-            Toast.makeText(this, "Browser startup failed: ${e.message}", Toast.LENGTH_LONG).show()
+            browserReady = true
+            Toast.makeText(this, "Browser startup failed: ${e.message}. Trying to open pages without uBlock.", Toast.LENGTH_LONG).show()
+            flushPendingLoad()
         }
+    }
+
+    private fun flushPendingLoad() {
+        if (!browserReady) return
+        val url = pendingLoadUrl ?: return
+        val session = geckoSession ?: return
+        pendingLoadUrl = null
+        val guide = activeGuide
+        val savedState = guide?.savedSessionState.orEmpty()
+        val restored = if (savedState.isNotBlank()) {
+            try { GeckoSession.SessionState.fromString(savedState) } catch (_: Exception) { null }
+        } else null
+        if (restored != null) session.restoreState(restored) else session.loadUri(url)
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -250,13 +258,7 @@ class MainActivity : Activity() {
         ))
         setContentView(root)
 
-        val url = pendingLoadUrl!!
-        if (uBlockReady) {
-            pendingLoadUrl = null
-            val savedState = guide.savedSessionState
-            val restored = if (savedState.isNotBlank()) GeckoSession.SessionState.fromString(savedState) else null
-            if (restored != null) session.restoreState(restored) else session.loadUri(url)
-        }
+        flushPendingLoad()
     }
 
     private fun saveCurrentSpot() {
