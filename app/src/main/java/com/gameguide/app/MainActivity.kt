@@ -301,10 +301,13 @@ class MainActivity : Activity() {
                             val id = item.optLong("id")
                             val name = item.optString("name", "Unknown game")
                             if (id <= 0) continue
-                            val art = "https://cdn.akamai.steamstatic.com/steam/apps/$id/library_600x900.jpg"
+                            var art = "https://cdn.akamai.steamstatic.com/steam/apps/$id/library_600x900.jpg"
                             if (seen.add(art)) {
-                                val bitmap = fetchBitmap(art)
-                                    ?: fetchBitmap("https://cdn.akamai.steamstatic.com/steam/apps/$id/header.jpg")
+                                var bitmap = fetchBitmap(art)
+                                if (bitmap == null) {
+                                    art = "https://cdn.akamai.steamstatic.com/steam/apps/$id/header.jpg"
+                                    bitmap = fetchBitmap(art)
+                                }
                                 if (bitmap != null) matches.add(Triple(name, art, bitmap))
                             }
                         }
