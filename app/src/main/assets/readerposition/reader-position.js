@@ -7,6 +7,7 @@
   let restoring = false;
   let userInteracted = false;
   let restoreAttempts = 0;
+  let manualJump = (location.hash || "").startsWith("#ggcp-open-");
 
   function clean(value) {
     return (value || "").replace(/\s+/g, " ").trim();
@@ -44,7 +45,7 @@
   }
 
   function saveNow() {
-    if (restoring || userInteracted === false && restoreAttempts > 0) return;
+    if (manualJump || restoring || userInteracted === false && restoreAttempts > 0) return;
     const el = currentBlock();
     if (!el || !browser.storage || !browser.storage.local) return;
     browser.storage.local.set({ [key]: makeAnchor(el) });
@@ -96,6 +97,7 @@
 
   function markInteraction() {
     userInteracted = true;
+    manualJump = false;
     restoring = false;
     clearTimeout(saveTimer);
     scheduleSave();
@@ -119,6 +121,7 @@
     const hash = location.hash || "";
     if (!hash.startsWith("#ggcp-save-") && !hash.startsWith("#ggcp-open-")) return;
     const saving = hash.startsWith("#ggcp-save-");
+    if (!saving) manualJump = true;
     // Remove the command from the visible URL without navigating away.
     history.replaceState(history.state, "", location.pathname + location.search);
     if (!browser.storage || !browser.storage.local) return;
@@ -148,6 +151,7 @@
   });
 
   if (!browser.storage || !browser.storage.local) return;
+  if (manualJump) return;
   browser.storage.local.get(key).then(result => {
     const saved = result[key];
     if (!saved) {
