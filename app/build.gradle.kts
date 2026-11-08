@@ -24,19 +24,6 @@ android {
         jvmTarget = "17"
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH")
-                ?: error("ANDROID_KEYSTORE_PATH is not configured"))
-            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                ?: error("ANDROID_KEYSTORE_PASSWORD is not configured")
-            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-                ?: error("ANDROID_KEY_ALIAS is not configured")
-            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
-                ?: error("ANDROID_KEY_PASSWORD is not configured")
-        }
-    }
-
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
