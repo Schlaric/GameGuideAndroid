@@ -875,7 +875,7 @@ class MainActivity : Activity() {
             setText(existing?.title ?: "")
         }
         val urlInput = EditText(this).apply {
-            hint = "https://www.ign.com/wikis/..."
+            hint = "https://example.com/game-guide/..."
             setSingleLine()
             setText(existing?.url ?: "")
         }
