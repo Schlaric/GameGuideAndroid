@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -38,6 +39,7 @@ class MainActivity : Activity() {
     private var activeGuide: Guide? = null
     private var browserReady = false
     private var pendingLoadUrl: String? = null
+    private var browserStartupStatus = "Preparing browser…"
     private val prefs by lazy { getSharedPreferences("gameguide", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,13 +54,36 @@ class MainActivity : Activity() {
     private fun initializeBrowser() {
         try {
             if (runtime == null) runtime = GeckoRuntime.create(this)
-            // Diagnostic build: bypass uBlock completely to determine whether
-            // the extension is interfering with page navigation/rendering.
-            browserReady = true
-            flushPendingLoad()
+            browserStartupStatus = "Installing uBlock Origin…"
+            Log.i("GameGuide", "Starting built-in uBlock installation")
+            runtime!!.webExtensionController
+                .ensureBuiltIn("resource://android/assets/ublock/", "uBlock0@raymondhill.net")
+                .accept(
+                    { extension ->
+                        browserReady = true
+                        browserStartupStatus = "uBlock is installed and ready."
+                        Log.i("GameGuide", "uBlock ready: ${extension.id}")
+                        runOnUiThread { flushPendingLoad() }
+                    },
+                    { error ->
+                        browserReady = true
+                        browserStartupStatus = "uBlock failed to start: ${error?.message ?: "unknown error"}"
+                        if (error != null) Log.e("GameGuide", "uBlock installation failed", error)
+                        runOnUiThread {
+                            Toast.makeText(
+                                this,
+                                "$browserStartupStatus Pages will open without ad blocking.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            flushPendingLoad()
+                        }
+                    }
+                )
         } catch (e: Exception) {
             browserReady = true
-            Toast.makeText(this, "Browser startup failed: ${e.message}", Toast.LENGTH_LONG).show()
+            browserStartupStatus = "uBlock startup error: ${e.message ?: "unknown error"}"
+            Log.e("GameGuide", "Browser startup failed; continuing without uBlock", e)
+            Toast.makeText(this, "$browserStartupStatus Pages will open without ad blocking.", Toast.LENGTH_LONG).show()
             flushPendingLoad()
         }
     }
@@ -220,7 +245,7 @@ class MainActivity : Activity() {
         })
         root.addView(header)
         root.addView(text(guide.title, 18f).apply { setPadding(0, dp(5), 0, dp(4)) })
-        val pageStatus = text("Preparing browser…", 12f, Color.LTGRAY).apply {
+        val pageStatus = text(browserStartupStatus, 12f, Color.LTGRAY).apply {
             setPadding(0, 0, 0, dp(6))
         }
         root.addView(pageStatus)
