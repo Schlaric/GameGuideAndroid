@@ -520,205 +520,226 @@ class MainActivity : Activity() {
         activeGuide = null
         root = baseLayout()
         val theme = currentTheme()
-        val muted = Color.rgb(155, 164, 181)
+        val muted = Color.rgb(153, 160, 174)
+        val surface = Color.rgb(24, 28, 36)
+        val scroll = ScrollView(this).apply {
+            clipToPadding = false
+            isFillViewport = true
+        }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(8), 0, dp(24))
+            setPadding(0, dp(8), 0, dp(28))
         }
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            clipToPadding = false
-            addView(content)
-        }
-        root.addView(scroll, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
+        scroll.addView(content)
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        val heading = LinearLayout(this).apply {
+        val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val headingText = LinearLayout(this).apply {
+        val headerText = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(text("MY COLLECTION", 11f, theme.primary).apply {
+            addView(text("GAMEGUIDE", 11f, theme.primary).apply {
+                letterSpacing = 0.22f
                 typeface = Typeface.DEFAULT_BOLD
-                letterSpacing = 0.16f
             })
-            addView(text("GameGuide", 30f).apply {
+            addView(text("Your collection", 27f).apply {
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                 setPadding(0, dp(4), 0, 0)
             })
-            addView(text("${guides.size} ${if (guides.size == 1) "strategy guide" else "strategy guides"} in your library", 13f, muted).apply {
-                setPadding(0, dp(3), 0, 0)
-            })
         }
-        heading.addView(headingText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        heading.addView(styledButton("•••") { showCoverSettings() }.apply {
+        header.addView(headerText, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(styledButton("•••") { showCoverSettings() }.apply {
             textSize = 20f
-            layoutParams = LinearLayout.LayoutParams(dp(48), dp(46))
-            contentDescription = "Settings and themes"
+            contentDescription = "Settings"
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(44))
         })
-        content.addView(heading, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(24) })
+        content.addView(header, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(24)
+        })
 
-        // Keep the last opened guide available without an extra navigation screen.
-        val recentId = prefs.getLong("last_opened_guide_id", -1L)
-        val recent = guides.firstOrNull { it.id == recentId } ?: guides.firstOrNull()
+        val lastId = prefs.getLong("last_opened_guide_id", -1L)
+        val recent = guides.firstOrNull { it.id == lastId } ?: guides.firstOrNull()
         if (recent != null) {
-            content.addView(text("PICK UP WHERE YOU LEFT OFF", 11f, muted).apply {
+            content.addView(text("CONTINUE YOUR ADVENTURE", 11f, muted).apply {
+                letterSpacing = 0.14f
                 typeface = Typeface.DEFAULT_BOLD
-                letterSpacing = 0.12f
-                setPadding(0, 0, 0, dp(10))
-            })
-            val featured = LinearLayout(this).apply {
+            }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(11) })
+            val hero = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = rounded(theme.surface, 20, theme.border)
-                setPadding(dp(14), dp(14), dp(14), dp(14))
+                background = rounded(surface, 20, Color.rgb(50, 54, 65))
+                setPadding(dp(15), dp(15), dp(15), dp(15))
                 isClickable = true
                 isFocusable = true
                 setOnClickListener { openGuide(recent) }
             }
-            val art = ImageView(this).apply {
+            val cover = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                background = rounded(theme.softAccent, 12)
+                background = rounded(theme.softAccent, 9)
                 clipToOutline = true
                 if (recent.coverUri.isNotBlank()) loadCoverInto(recent.coverUri, this)
                 else setImageResource(android.R.drawable.ic_menu_gallery)
             }
-            featured.addView(art, LinearLayout.LayoutParams(dp(86), dp(118)))
-            val summary = LinearLayout(this).apply {
+            hero.addView(cover, LinearLayout.LayoutParams(dp(92), dp(133)))
+            val info = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(14), 0, 0, 0)
-                addView(text("CONTINUE READING", 10f, theme.primary).apply {
+                setPadding(dp(16), 0, 0, 0)
+                addView(text("CURRENT GUIDE", 10f, theme.primary).apply {
+                    letterSpacing = 0.12f
                     typeface = Typeface.DEFAULT_BOLD
-                    letterSpacing = 0.08f
                 })
-                addView(text(recent.title, 17f).apply {
+                addView(text(recent.title, 18f).apply {
                     typeface = Typeface.DEFAULT_BOLD
                     maxLines = 3
-                    setPadding(0, dp(6), 0, dp(10))
+                    setPadding(0, dp(7), 0, dp(12))
                 })
-                addView(text("Resume guide  →", 14f).apply {
+                addView(text("▶  Resume reading", 13f).apply {
                     typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(Color.WHITE)
+                    background = rounded(theme.primary, 10)
+                    setPadding(dp(13), dp(11), dp(13), dp(11))
+                    gravity = Gravity.CENTER
                 })
             }
-            featured.addView(summary, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            content.addView(featured, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(24) })
-        }
-
-        val libraryHeading = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(text("Your library", 20f).apply {
-                typeface = Typeface.DEFAULT_BOLD
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(styledButton("+ Add game", true) { showAddDialog() }.apply {
-                textSize = 13f
-                minHeight = dp(42)
+            hero.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+            content.addView(hero, LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = dp(29)
             })
         }
-        content.addView(libraryHeading, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(14) })
+
+        val shelfHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        shelfHeader.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text("The library", 21f).apply {
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            addView(text("${guides.size} ${if (guides.size == 1) "guide" else "guides"}", 12f, muted))
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        shelfHeader.addView(styledButton("+  Add", true) { showAddDialog() }.apply {
+            textSize = 13f
+            layoutParams = LinearLayout.LayoutParams(dp(92), dp(42))
+        })
+        content.addView(shelfHeader, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(17)
+        })
 
         if (guides.isEmpty()) {
             content.addView(LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                background = rounded(theme.surface, 20, theme.border)
-                setPadding(dp(20), dp(34), dp(20), dp(34))
-                addView(text("Your adventure starts here", 19f).apply {
-                    typeface = Typeface.DEFAULT_BOLD
+                background = rounded(surface, 18, theme.border)
+                setPadding(dp(24), dp(40), dp(24), dp(40))
+                addView(text("Your next adventure awaits", 19f).apply {
                     gravity = Gravity.CENTER
+                    typeface = Typeface.DEFAULT_BOLD
                 })
-                addView(text("Add your first walkthrough to build your collection.", 14f, muted).apply {
+                addView(text("Add a walkthrough to start your collection.", 13f, muted).apply {
                     gravity = Gravity.CENTER
                     setPadding(0, dp(10), 0, 0)
                 })
             })
         }
 
-        // A single-column card on the cover display, two columns on the inner display.
-        val wide = resources.configuration.screenWidthDp >= 600
-        val columns = if (wide) 2 else 1
-        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        // Poster-like game covers take priority over buttons and form controls.
+        // Width buckets allow the inner Fold display to show a wider collection.
+        val screenWidth = resources.configuration.screenWidthDp
+        val columns = when {
+            screenWidth >= 800 -> 4
+            screenWidth >= 560 -> 3
+            else -> 2
+        }
+        val gap = dp(12)
+        val usableDp = screenWidth - 36
+        val coverWidth = dp(((usableDp - 12 * (columns - 1)) / columns).coerceAtLeast(90))
+        val coverHeight = (coverWidth * 1.45f).toInt()
+        val shelf = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
         guides.chunked(columns).forEach { group ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            group.forEach { guide ->
-                val card = LinearLayout(this).apply {
+            group.forEachIndexed { index, guide ->
+                val tile = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
-                    background = rounded(theme.surface, 18, theme.border)
-                    setPadding(dp(12), dp(12), dp(12), dp(12))
+                    setPadding(0, 0, 0, dp(4))
                 }
-                val top = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                }
-                val cover = ImageView(this).apply {
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                    background = rounded(theme.softAccent, 10)
+                val posterFrame = FrameLayout(this).apply {
+                    background = rounded(surface, 12)
                     clipToOutline = true
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener { openGuide(guide) }
+                }
+                val poster = ImageView(this).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
                     if (guide.coverUri.isNotBlank()) loadCoverInto(guide.coverUri, this)
-                    else setImageResource(android.R.drawable.ic_menu_gallery)
+                    else {
+                        setImageResource(android.R.drawable.ic_menu_gallery)
+                        setBackgroundColor(theme.softAccent)
+                    }
                 }
-                top.addView(cover, LinearLayout.LayoutParams(dp(76), dp(105)))
-                val details = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(dp(13), 0, 0, 0)
-                    addView(text(guide.title, 16f).apply {
-                        typeface = Typeface.DEFAULT_BOLD
-                        maxLines = 3
-                    })
-                    addView(text(if (guide.savedUrl.isNotBlank()) "●  SAVED SPOT" else "○  READY TO READ",
-                        10f, if (guide.savedUrl.isNotBlank()) Color.rgb(109, 207, 160) else muted).apply {
-                        typeface = Typeface.DEFAULT_BOLD
-                        letterSpacing = 0.06f
-                        setPadding(0, dp(9), 0, 0)
-                    })
+                posterFrame.addView(poster, FrameLayout.LayoutParams(-1, -1))
+                val menuButton = TextView(this).apply {
+                    text = "⋮"
+                    textSize = 23f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    background = rounded(Color.rgb(35, 39, 49), 11)
+                    contentDescription = "Options for ${guide.title}"
+                    setOnClickListener { anchor ->
+                        val popup = android.widget.PopupMenu(this@MainActivity, anchor)
+                        popup.menu.add("Edit guide")
+                        popup.menu.add("Remove guide")
+                        popup.setOnMenuItemClickListener { item ->
+                            when (item.title.toString()) {
+                                "Edit guide" -> { showEditDialog(guide); true }
+                                "Remove guide" -> {
+                                    AlertDialog.Builder(this@MainActivity)
+                                        .setMessage("Remove ${guide.title} from your library?")
+                                        .setNegativeButton("Cancel", null)
+                                        .setPositiveButton("Remove") { _, _ ->
+                                            guides.remove(guide)
+                                            saveGuides()
+                                            showLibrary()
+                                        }.show()
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                        popup.show()
+                    }
                 }
-                top.addView(details, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                card.addView(top)
-                card.addView(styledButton("Continue reading  →", true) { openGuide(guide) }.apply {
-                    layoutParams = LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, dp(44)
-                    ).apply { topMargin = dp(12) }
+                posterFrame.addView(menuButton, FrameLayout.LayoutParams(dp(34), dp(34), Gravity.TOP or Gravity.END).apply {
+                    topMargin = dp(7)
+                    rightMargin = dp(7)
                 })
-                val actions = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.END
-                    setPadding(0, dp(6), 0, 0)
-                    addView(styledButton("Edit") { showEditDialog(guide) }.apply {
-                        textSize = 12f
-                    })
-                    addView(styledButton("Remove") {
-                        AlertDialog.Builder(this@MainActivity)
-                            .setMessage("Remove ${guide.title} from your library?")
-                            .setNegativeButton("Cancel", null)
-                            .setPositiveButton("Remove") { _, _ ->
-                                guides.remove(guide)
-                                saveGuides()
-                                showLibrary()
-                            }.show()
-                    }.apply { textSize = 12f }, LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                    ).apply { leftMargin = dp(8) })
-                }
-                card.addView(actions)
-                row.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    leftMargin = if (group.indexOf(guide) > 0) dp(6) else 0
-                    rightMargin = if (group.indexOf(guide) == 0 && columns == 2) dp(6) else 0
+                tile.addView(posterFrame, LinearLayout.LayoutParams(-1, coverHeight))
+                tile.addView(text(guide.title, 13f).apply {
+                    typeface = Typeface.DEFAULT_BOLD
+                    maxLines = 2
+                    setPadding(0, dp(9), 0, 0)
+                })
+                tile.addView(text(if (guide.savedUrl.isNotBlank()) "● Saved spot" else "○ Ready to read",
+                    11f, if (guide.savedUrl.isNotBlank()) Color.rgb(109, 207, 160) else muted).apply {
+                    setPadding(0, dp(5), 0, 0)
+                })
+                row.addView(tile, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    if (index < columns - 1) rightMargin = gap
                 })
             }
-            if (group.size < columns) row.addView(View(this), LinearLayout.LayoutParams(0, dp(1), 1f))
-            rows.addView(row, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(12) })
+            repeat(columns - group.size) {
+                row.addView(View(this), LinearLayout.LayoutParams(0, dp(1), 1f).apply {
+                    if (it < columns - group.size - 1) rightMargin = gap
+                })
+            }
+            shelf.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = dp(20)
+            })
         }
-        content.addView(rows)
+        content.addView(shelf)
         setContentView(root)
     }
 
