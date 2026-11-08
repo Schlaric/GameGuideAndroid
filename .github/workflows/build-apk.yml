@@ -62,6 +62,9 @@ jobs:
           PY
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Verify uBlock locale assets are packaged
+        run: |
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -F "assets/ublock/_locales/en/messages.json"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
