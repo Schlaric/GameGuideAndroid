@@ -4,6 +4,8 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.Button
@@ -40,6 +42,16 @@ class MainActivity : Activity() {
     private var browserReady = false
     private var pendingLoadUrl: String? = null
     private var browserStartupStatus = "Preparing browser…"
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val browserStartupTimeout = Runnable {
+        if (!browserReady) {
+            browserReady = true
+            browserStartupStatus = "uBlock startup timed out; opening without ad blocking."
+            Log.w("GameGuide", browserStartupStatus)
+            Toast.makeText(this, browserStartupStatus, Toast.LENGTH_LONG).show()
+            flushPendingLoad()
+        }
+    }
     private val prefs by lazy { getSharedPreferences("gameguide", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,16 +68,20 @@ class MainActivity : Activity() {
             if (runtime == null) runtime = GeckoRuntime.create(this)
             browserStartupStatus = "Installing uBlock Origin…"
             Log.i("GameGuide", "Starting built-in uBlock installation")
+            // Never let a stuck WebExtension install prevent the walkthrough itself from opening.
+            mainHandler.postDelayed(browserStartupTimeout, 8000)
             runtime!!.webExtensionController
                 .ensureBuiltIn("resource://android/assets/ublock/", "uBlock0@raymondhill.net")
                 .accept(
                     { extension ->
+                        mainHandler.removeCallbacks(browserStartupTimeout)
                         browserReady = true
                         browserStartupStatus = "uBlock is installed and ready."
                         Log.i("GameGuide", "uBlock ready: ${extension?.id ?: "unknown extension"}")
                         runOnUiThread { flushPendingLoad() }
                     },
                     { error ->
+                        mainHandler.removeCallbacks(browserStartupTimeout)
                         browserReady = true
                         browserStartupStatus = "uBlock failed to start: ${error?.message ?: "unknown error"}"
                         if (error != null) Log.e("GameGuide", "uBlock installation failed", error)
@@ -80,6 +96,7 @@ class MainActivity : Activity() {
                     }
                 )
         } catch (e: Exception) {
+            mainHandler.removeCallbacks(browserStartupTimeout)
             browserReady = true
             browserStartupStatus = "uBlock startup error: ${e.message ?: "unknown error"}"
             Log.e("GameGuide", "Browser startup failed; continuing without uBlock", e)
