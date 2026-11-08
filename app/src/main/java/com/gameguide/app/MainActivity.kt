@@ -34,6 +34,7 @@ import org.json.JSONObject
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
+import org.mozilla.geckoview.ScreenLength
 
 private data class AppTheme(val name: String, val primary: Int, val surface: Int, val border: Int, val softAccent: Int)
 
@@ -59,6 +60,8 @@ class MainActivity : Activity() {
     private var activeGuide: Guide? = null
     private var browserReady = false
     private var pendingLoadUrl: String? = null
+    private var pendingRestoreScrollY: Int? = null
+    private var pendingScrollSave: Runnable? = null
     private var browserStartupStatus = "Preparing browser…"
     private var coverPickerCallback: ((String) -> Unit)? = null
     private var backButton: Button? = null
@@ -179,7 +182,8 @@ class MainActivity : Activity() {
         pendingLoadUrl = null
         // GeckoView session snapshots include scroll position, zoom, form data,
         // and navigation history. Restore them when available; otherwise load fresh.
-        val savedState = activeGuide?.savedSessionState
+        val guide = activeGuide
+        val savedState = guide?.savedSessionState
         val restored = try {
             savedState?.takeIf { it.isNotBlank() }?.let {
                 GeckoSession.SessionState.fromString(it)
@@ -187,6 +191,9 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             Log.w("GameGuide", "Saved browser state could not be restored; loading URL instead", e)
             null
+        }
+        if (guide?.savedUrl?.isNotBlank() == true) {
+            pendingRestoreScrollY = guide.scrollY
         }
         if (restored != null) {
             session.restoreState(restored)
@@ -850,11 +857,50 @@ class MainActivity : Activity() {
             }
         })
 
+        session.setScrollDelegate(object : GeckoSession.ScrollDelegate {
+            override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
+                // Keep the latest real content position separately from Gecko's
+                // asynchronous session snapshot. Ignore callbacks while we are
+                // applying the saved position during a page restore.
+                if (pendingRestoreScrollY == null) {
+                    guide.scrollY = scrollY.coerceAtLeast(0)
+                    pendingScrollSave?.let { mainHandler.removeCallbacks(it) }
+                    val save = Runnable { saveGuides(); pendingScrollSave = null }
+                    pendingScrollSave = save
+                    mainHandler.postDelayed(save, 300)
+                }
+            }
+        })
+
         session.setProgressDelegate(object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
+                if (guide.savedUrl.isNotBlank() && guide.savedUrl != url) {
+                    guide.scrollY = 0
+                    pendingRestoreScrollY = null
+                }
                 guide.savedUrl = url
                 saveGuides()
                 android.util.Log.d("GameGuide", "Page started: $url")
+            }
+
+            override fun onPageStop(session: GeckoSession, success: Boolean) {
+                val targetY = pendingRestoreScrollY ?: return
+                // Apply the explicit saved offset after Gecko has finished its
+                // initial restore, so a stale session snapshot cannot win.
+                mainHandler.postDelayed({
+                    if (activeGuide === guide && geckoSession === session && pendingRestoreScrollY == targetY) {
+                        session.panZoomController.scrollTo(
+                            ScreenLength.zero(),
+                            ScreenLength.fromPixels(targetY.toDouble()),
+                            org.mozilla.geckoview.PanZoomController.SCROLL_BEHAVIOR_AUTO
+                        )
+                        guide.scrollY = targetY
+                        saveGuides()
+                        mainHandler.postDelayed({
+                            if (pendingRestoreScrollY == targetY) pendingRestoreScrollY = null
+                        }, 250)
+                    }
+                }, 700)
             }
 
             override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {
@@ -880,14 +926,15 @@ class MainActivity : Activity() {
     private fun saveCurrentSpot(afterSave: (() -> Unit)? = null) {
         val guide = activeGuide ?: run { afterSave?.invoke(); return }
         val session = geckoSession ?: run { afterSave?.invoke(); return }
-        // GeckoView does not expose WebView-style evaluateJavascript(). Its
-        // native session snapshot is the supported way to persist reading position.
+        // The scroll delegate tracks the live content offset as it changes.
+        // Persist it immediately; flushSessionState remains useful for history,
+        // zoom, and form state but completes asynchronously.
+        guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
+        pendingScrollSave?.let { mainHandler.removeCallbacks(it) }
+        pendingScrollSave = null
+        saveGuides()
         session.flushSessionState()
-        mainHandler.postDelayed({
-            guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
-            saveGuides()
-            afterSave?.invoke()
-        }, 500)
+        afterSave?.invoke()
     }
 
     @Deprecated("Deprecated in Android")
