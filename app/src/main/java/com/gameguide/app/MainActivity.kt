@@ -653,15 +653,7 @@ class MainActivity : Activity() {
             minHeight = dp(38)
             setPadding(dp(8), 0, dp(8), 0)
         })
-        toolbar.addView(styledButton("Save spot", true) { saveCurrentSpot() }.apply {
-            textSize = 11f
-            minHeight = dp(38)
-            setPadding(dp(8), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)
-            ).apply { leftMargin = dp(6) }
-        })
-        toolbar.addView(styledButton("Open") {
+                toolbar.addView(styledButton("Open in Browser") {
             val url = guide.savedUrl.ifBlank { guide.url }
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }.apply {
@@ -678,11 +670,6 @@ class MainActivity : Activity() {
             maxLines = 2
             setPadding(0, dp(12), 0, dp(5))
         })
-        val pageStatus = text(browserStartupStatus, 10f, Color.rgb(145, 170, 205)).apply {
-            setPadding(0, 0, 0, dp(2))
-            maxLines = 1
-        }
-        header.addView(pageStatus)
         root.addView(header, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(10) })
@@ -693,27 +680,11 @@ class MainActivity : Activity() {
         geckoSession = session
         pendingLoadUrl = if (guide.savedUrl.isNotBlank()) guide.savedUrl else guide.url
 
-        session.setContentDelegate(object : GeckoSession.ContentDelegate {
-            override fun onTitleChange(session: GeckoSession, title: String?) {
-                pageStatus.text = title?.takeIf { it.isNotBlank() } ?: "Page loaded (no title)"
-                android.util.Log.d("GameGuide", "Page title: $title")
-            }
-        })
         session.setProgressDelegate(object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
                 guide.savedUrl = url
                 saveGuides()
-                pageStatus.text = "Loading: $url"
                 android.util.Log.d("GameGuide", "Page started: $url")
-            }
-
-            override fun onPageStop(session: GeckoSession, success: Boolean) {
-                pageStatus.text = if (success) "Page load finished. If the area below is blank, the site rendered no visible content." else "Page load failed. Check connection or site compatibility."
-                android.util.Log.d("GameGuide", "Page stopped; success=$success")
-            }
-
-            override fun onProgressChange(session: GeckoSession, progress: Int) {
-                if (progress < 100) pageStatus.text = "Loading page… $progress%"
             }
 
             override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {
@@ -741,9 +712,6 @@ class MainActivity : Activity() {
         mainHandler.postDelayed({
             guide.savedUrl = guide.savedUrl.ifBlank { guide.url }
             saveGuides()
-            if (afterSave == null) {
-                Toast.makeText(this, "Reading position saved!", Toast.LENGTH_SHORT).show()
-            }
             afterSave?.invoke()
         }, 500)
     }
