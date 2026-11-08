@@ -62,7 +62,7 @@ class MainActivity : Activity() {
                     { extension ->
                         browserReady = true
                         browserStartupStatus = "uBlock is installed and ready."
-                        Log.i("GameGuide", "uBlock ready: ${extension.id}")
+                        Log.i("GameGuide", "uBlock ready: ${extension?.id ?: "unknown extension"}")
                         runOnUiThread { flushPendingLoad() }
                     },
                     { error ->
